@@ -113,14 +113,31 @@ def create_chain_with_message_history():
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
 
-    # 프롬프트 템플릿 정의
-    prompt = ChatPromptTemplate.from_messages(
+    # 질문 문맥화 프롬프트
+    contextualize_q_system_prompt = """Given a chat history and the latest user question \
+    which might reference context in the chat history, formulate a standalone question \
+    which can be understood without the chat history. Do NOT answer the question, \
+    just reformulate it if needed and otherwise return it as is."""
+    contextualize_q_prompt = ChatPromptTemplate.from_messages(
         [
-            (
-                "system",
-                "당신은 사용자의 질문에 정확하고 관련된 답변을 제공하는 AI 도우미입니다.",
-            ),
-            MessagesPlaceholder("chat_history"),
+            ("system", contextualize_q_system_prompt),
+            MessagesPlaceholder("history"),
+            ("human", "{input}"),
+        ]
+    )
+
+    # 질문 답변 프롬프트
+    qa_system_prompt = """You are an assistant for question-answering tasks. \
+    Use the following pieces of retrieved context to answer the question. \
+    If you don't know the answer, just say that you don't know. \
+    Keep the answer perfect. Please use imogi with the answer. \
+    대답은 한국어로 하고, 존댓말을 써줘.\
+
+    {context}"""
+    qa_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", qa_system_prompt),
+            MessagesPlaceholder("history"),
             ("human", "{input}"),
         ]
     )
@@ -133,16 +150,15 @@ def create_chain_with_message_history():
     )
 
     # RunnableWithMessageHistory: 대화 히스토리 관리
-    message_chain = RunnableWithMessageHistory(
-        runnable=prompt | llm,
+    contextualize_chain = RunnableWithMessageHistory(
+        runnable=contextualize_q_prompt | llm,
         get_session_history=lambda session_id: chat_history_storage.setdefault(
             session_id, ChatMessageHistory()
         ),
         input_messages_key="input",
-        history_messages_key="chat_history",
+        history_messages_key="history",
     )
 
-    # Retrieval QA 체인 생성
     retrieval_qa_chain = RetrievalQA.from_chain_type(
         llm=llm,
         chain_type="stuff",
@@ -150,30 +166,32 @@ def create_chain_with_message_history():
         return_source_documents=True,
     )
 
-    # 체인을 분리하고 수동으로 연결
+    # 체인을 결합
     def combined_chain(input_data):
-        # 메시지 체인 실행
-        session_id = input_data.get("session_id")  # session_id를 가져옵니다.
-        history_result = message_chain.invoke(
-            {"input": input_data["input"]}, {"configurable": {"session_id": session_id}}
+        session_id = input_data.get("session_id")
+        user_query = input_data.get("input")
+
+        # 1. 질문 문맥화 처리
+        contextualized_result = contextualize_chain.invoke(
+            {"input": user_query, "history": chat_history_storage.get(session_id, [])},
+            {"configurable": {"session_id": session_id}},
         )
-        print(f"History Result: {history_result}")  # 디버깅용 로그
+        print(f"Contextualized Question: {contextualized_result}")
 
-        # AIMessage 객체의 content를 추출
-        history_content = history_result.content
-        print(f"History Content: {history_content}")  # 디버깅용 로그
+        # 2. QA 체인 실행
+        retrieval_result = retrieval_qa_chain.invoke(
+            {"query": contextualized_result.content, "history": chat_history_storage.get(session_id, [])}
+        )
+        print(f"Retrieval Result: {retrieval_result}")
 
-        # 히스토리에서 생성된 텍스트를 retriever로 전달
-        retrieval_result = retrieval_qa_chain.invoke({"query": history_content})
-        print(f"Retrieval Result: {retrieval_result}")  # 디버깅용 로그
-
-        # `result`와 `source_documents`를 반환
         return {
-            "result": retrieval_result.get("result"),
+            "contextualized_question": contextualized_result.content,
+            "retrieval_response": retrieval_result.get("result"),
             "source_documents": retrieval_result.get("source_documents", []),
         }
 
     return combined_chain
+
 
 
 # 입력 데이터 모델 정의
@@ -198,42 +216,36 @@ def serialize_documents(documents):
 @app.post("/query")
 async def query(request: QueryRequest):
     try:
-        # 입력 데이터 접근
+        # 요청 데이터
         user_input = request.query
         session_id = request.session_id
 
-        # 입력 데이터를 문자열로 강제 변환
-        if not isinstance(user_input, str):
-            user_input = str(user_input)
-
-        # RunnableWithMessageHistory로 자동 히스토리 관리 설정
+        # 체인 생성
         chain_with_message_history = create_chain_with_message_history()
 
-        # 질문 전달 및 응답 받기
-        print(
-            f"Invoking chain with input: {user_input} and session_id: {session_id}"
-        )  # 디버깅 로그 추가
+        # 체인을 통해 질문 전달 및 응답 처리
         response = chain_with_message_history(
             {"input": user_input, "session_id": session_id}
         )
-        print(f"Response from chain: {response}")  # 응답 디버깅
 
-        # `source_documents`를 직렬화 가능한 형태로 변환
+        # 문서 직렬화
         serialized_documents = serialize_documents(response["source_documents"])
 
-        # 응답 반환
+        # 응답 데이터 구조
         return JSONResponse(
             content={
-                "answer": response["result"],  # 응답 텍스트
-                "source_documents": serialized_documents,  # 직렬화된 문서
+                "contextualized_question": response["contextualized_question"],  # 문맥화된 질문
+                "answer": response["retrieval_response"],  # 최종 응답
+                "source_documents": serialized_documents,  # 문서 정보
             }
         )
 
     except Exception as e:
-        # 에러 로그 출력
+        # 에러 핸들링 및 로그 출력
         error_trace = traceback.format_exc()
         print(f"Error in query: {error_trace}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 if __name__ == "__main__":

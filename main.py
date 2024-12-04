@@ -292,6 +292,7 @@ def close_vectorstore():
 # Lifespan 이벤트 핸들러
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Lifespan 이벤트 핸들러"""
     try:
         # 애플리케이션 초기화 시 실행할 작업
         print("Application starting...")
@@ -488,7 +489,7 @@ table_name_mapping = {
     "task_type": "과제 유형 테이블 (과제의 분류 및 유형 정보 포함)",
     "business_trip": "출장 테이블 (사원의 출장 기록 및 세부 정보 포함)",
     "leave_return": "복직 테이블 (휴직 후 복직 정보 포함)",
-    "commute": "사원별 출퇴근 테이블이력 (사원의 출퇴근 시간 및 기록 포함)",
+    "commute": "출퇴근 테이블 (사원의 출퇴근 시간 및 기록 포함)",
     "attendance_request_file": "근태 요청 파일 테이블 (근태 요청에 첨부된 파일 정보 포함)",
     "attendance_request": "근태 요청 테이블 (사원의 근태 변경 요청 기록 포함)",
     "attendance_request_type": "근태 요청 유형 테이블 (근태 요청의 분류 및 유형 정보 포함)",
@@ -502,7 +503,7 @@ table_name_mapping = {
     "annual_vacation_promotion_policy": "연차 촉진 정책 테이블 (연차 사용 및 촉진 정책 정보 포함)",
     "vacation_request_file": "휴가 요청 파일 테이블 (휴가 요청에 첨부된 파일 정보 포함)",
     "vacation_request": "휴가 요청 테이블 (사원의 휴가 신청 기록 포함)",
-    "vacation": "사원별 지급 받은 휴가 테이블 ",
+    "vacation": "휴가 테이블 (휴가 사용 기록 및 상태 정보 포함)",
     "vacation_policy": "휴가 정책 테이블 (연차 및 유급/무급 휴가 정책 관련 정보 포함)",
     "vacation_type": "휴가 유형 테이블 (연차, 병가 등 휴가 유형 정보 포함)",
     "department_member": "부서 구성원 테이블 (부서별 소속 사원 정보 포함)",

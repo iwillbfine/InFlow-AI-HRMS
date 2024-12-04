@@ -257,6 +257,7 @@ async def lifespan(app: FastAPI):
     global vectorstore  # 전역 변수로 vectorstore 사용
 
     try:
+        close_vectorstore()  # Vectorstore 종료
         print("Initializing directories...")
         initialize_directories()
 
@@ -349,18 +350,41 @@ def get_or_create_history(session_id):
 def create_chain_with_message_history():
     global rag_chain  # 전역 변수를 사용하도록 선언
 
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})  # 검색 결과 제한
-
+    retriever = vectorstore.as_retriever(
+        search_type="mmr", search_kwargs={"lambda_mult": 0.9, "fetch_k": 10, "k": 3}
+    )
     # 질문 문맥화 프롬프트
     contextualize_q_system_prompt = """Given a chat history and the latest user question \
     which might reference context in the chat history, formulate a standalone question \
-    which can be understood without the chat history. Do NOT answer the question, \
-    just reformulate it if needed and otherwise return it as is. 질문을 생성하세요."""
+    which can be understood without the chat history. If the input is not a question, \
+    generate a plausible question that matches the intent. Do NOT answer the question, \
+    just reformulate or generate it. 
+    
+    질문을 생성하세요."""
 
     contextualize_q_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", contextualize_q_system_prompt),
             MessagesPlaceholder("history"),
+            ("human", "{input}"),
+        ]
+    )
+
+    # 가상의 답변 생성 프롬프트
+    hypothetical_answer_system_prompt = """
+    Create a hypothetical response based on the input question. Ensure that the response is plausible \
+    and aligns with the context of an HR management system. This response will be used to enhance the retrieval process.\
+
+    For example:
+    - Question: "조창욱 사원 정보를 알려줘"
+    - Response: "조창욱 사원은 현재 HR 부서에서 근무 중이며, 직위는 과장입니다. 연락처는 내부 시스템에서 확인 가능합니다."
+
+    질문에 대해 가상의 답변을 생성하세요.
+    """
+
+    hypothetical_answer_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", hypothetical_answer_system_prompt),
             ("human", "{input}"),
         ]
     )
@@ -404,6 +428,8 @@ def create_chain_with_message_history():
         history_messages_key="history",
     )
 
+    hypothetical_answer_chain = hypothetical_answer_prompt | llm
+
     history_aware_retriever = create_history_aware_retriever(
         llm, retriever, contextualize_q_prompt
     )
@@ -435,10 +461,17 @@ def create_chain_with_message_history():
                 "source_documents": [],
             }
 
-        # 2. RAG 체인 실행
+        # 2. 가상의 답변 생성
+        hypothetical_response = hypothetical_answer_chain.invoke(
+            {"input": contextualized_result.content}
+        )
+        print(f"Hypothetical Answer: {hypothetical_response}")
+        print()
+
+        # 3. RAG 체인 실행
         retrieval_result = rag_chain.invoke(
             {
-                "input": contextualized_result.content,
+                "input": hypothetical_response.content,
                 "history": history_as_list,
             }
         )
@@ -451,7 +484,7 @@ def create_chain_with_message_history():
             + history_as_list
         )
 
-        # 3. 최종 응답 생성
+        # 4. 최종 응답 생성
         llm_input = [
             SystemMessage(
                 content="You are a helpful assistant. Use the following context and history to answer the user's question."
@@ -552,11 +585,6 @@ async def query(request: QueryRequest):
         # 체인 생성 및 실행
         chain = create_chain_with_message_history()
         response = chain({"input": user_input, "session_id": session_id})
-
-        # 검색 결과 가공
-        source_documents = annotate_with_table_names(
-            response.get("source_documents", [])
-        )
 
         contextualized_question = response.get("contextualized_question", "").replace(
             "\\", ""

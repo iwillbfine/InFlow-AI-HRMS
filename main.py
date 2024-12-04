@@ -1,30 +1,50 @@
-import os
-from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from pydantic import BaseModel
+import os  # 운영체제와 관련된 경로 및 환경 변수 작업을 위한 라이브러리
+from dotenv import load_dotenv  # .env 파일에서 환경 변수를 로드하기 위한 라이브러리
+from fastapi import FastAPI, HTTPException  # FastAPI 서버 및 HTTP 예외 처리
+from fastapi.responses import JSONResponse  # JSON 응답을 반환하기 위한 클래스
+from fastapi.middleware.cors import CORSMiddleware  # CORS 설정을 위한 미들웨어
+from contextlib import (
+    asynccontextmanager,
+)  # 비동기 리소스 관리에 유용한 컨텍스트 매니저
+from pydantic import BaseModel  # 데이터 유효성 검증을 위한 모델 클래스
 
 # LangChain 관련 모듈
-from langchain_community.document_loaders import PyPDFLoader, TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.schema import Document
-from langchain_community.vectorstores import Chroma
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    TextLoader,
+)  # 문서를 로드하기 위한 로더
+from langchain.text_splitter import (
+    RecursiveCharacterTextSplitter,
+)  # 긴 텍스트를 분할하기 위한 유틸리티
+from langchain_community.vectorstores import Chroma  # 벡터 스토어로 Chroma를 사용
+from langchain_openai import (
+    OpenAIEmbeddings,
+    ChatOpenAI,
+)  # OpenAI 기반 임베딩 및 LLM 사용
 
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_history_aware_retriever, create_retrieval_chain
-from langchain_core.runnables.history import RunnableWithMessageHistory
-
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_community.chat_message_histories import ChatMessageHistory
-from langchain.chains import RetrievalQA
+from langchain.chains.combine_documents import (
+    create_stuff_documents_chain,
+)  # 검색된 문서 결합 체인 생성
+from langchain.chains import (
+    create_history_aware_retriever,
+)  # 대화 히스토리를 고려한 검색기 생성
+from langchain_core.prompts import (
+    ChatPromptTemplate,
+    MessagesPlaceholder,
+)  # 대화형 프롬프트 템플릿 정의
+from langchain_core.runnables.history import (
+    RunnableWithMessageHistory,
+)  # 대화 히스토리를 처리하는 실행 가능 체인
+from langchain_community.chat_message_histories import (
+    ChatMessageHistory,
+)  
+# 대화 메시지 히스토리 관리
 from langchain.schema import HumanMessage, SystemMessage
+from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 
-import traceback
-import uvicorn
+import traceback  # 에러 디버깅 및 트레이스백 추적
+import uvicorn  # FastAPI 서버 실행
+
 
 # .env 파일 로드
 load_dotenv()
@@ -125,9 +145,10 @@ def create_chain_with_message_history():
 
     # 질문 문맥화 프롬프트
     contextualize_q_system_prompt = """Given a chat history and the latest user question \
-    which might reference context in the chat history, formulate a standalone question \
-    which can be understood without the chat history. Do NOT answer the question, \
-    just reformulate it if needed and otherwise return it as is."""
+which might reference context in the chat history, formulate a standalone question \
+which can be understood without the chat history. Do NOT answer the question, \
+just reformulate it if needed and otherwise return it as is. 질문을 생성하세요."""
+
     contextualize_q_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", contextualize_q_system_prompt),
@@ -138,14 +159,14 @@ def create_chain_with_message_history():
 
     # 질문 답변 프롬프트
     qa_system_prompt = """
-    You are an assistant capable of answering questions based on the provided context and the conversation history.
+    You are an HR management system chatbot capable of answering questions related to salary, leave, attendance, and performance evaluation.
     Leverage the retrieved context and chat history to provide the most accurate and helpful answer.
 
     If the context or history does not provide enough information, respond as follows:
     - If you can guess the intent, provide a relevant response or a suggestion.
     - If no answer can be reasonably inferred, reply politely: "질문에 대해 정확한 답변을 드리기 어려워요. 조금 더 구체적으로 질문해 주시면 감사하겠습니다."
 
-    대답은 반드시 한국어로 작성해 주세요.
+    대답은 반드시 한국어로 작성하고, 반드시 존댓말을 써주세요.\
 
     {context}
     """
@@ -179,8 +200,6 @@ def create_chain_with_message_history():
     )
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
     rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
-
-    from langchain.schema import HumanMessage, SystemMessage
 
     def combined_chain(input_data):
         session_id = input_data.get("session_id")
@@ -257,7 +276,6 @@ async def query(request: QueryRequest):
         )
         answer = (
             response.get("retrieval_response", "답변을 생성하지 못했습니다.")
-            .replace("\n", " ")
             .replace("\\", "")
         )
         serialized_documents = serialize_documents(response.get("source_documents", []))

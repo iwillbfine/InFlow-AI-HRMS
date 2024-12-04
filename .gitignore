@@ -4,8 +4,10 @@
 # .gitignore에 추가
 chromadb
 chromadb_test
+db_test
 *.bin
 *.sqlite3
 
 chromadb/
 chromadb_test/
+db_test/

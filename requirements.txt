@@ -4,3 +4,4 @@ langchain
 chromadb
 python-dotenv
 openai
+pymysql

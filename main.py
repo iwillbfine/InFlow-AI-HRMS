@@ -110,9 +110,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 대화 히스토리 저장소
-chat_history_storage = {}
-
 
 # 입력 데이터 모델 정의
 class QueryRequest(BaseModel):
@@ -133,6 +130,10 @@ def serialize_documents(documents):
     return serialized_docs
 
 
+# 히스토리 생성 및 조회 
+
+chat_history_storage = {} # 대화 히스토리 저장소
+
 def get_or_create_history(session_id):
     if session_id not in chat_history_storage:
         chat_history_storage[session_id] = ChatMessageHistory()
@@ -147,9 +148,9 @@ def create_chain_with_message_history():
 
     # 질문 문맥화 프롬프트
     contextualize_q_system_prompt = """Given a chat history and the latest user question \
-which might reference context in the chat history, formulate a standalone question \
-which can be understood without the chat history. Do NOT answer the question, \
-just reformulate it if needed and otherwise return it as is. 질문을 생성하세요."""
+    which might reference context in the chat history, formulate a standalone question \
+    which can be understood without the chat history. Do NOT answer the question, \
+    just reformulate it if needed and otherwise return it as is. 질문을 생성하세요."""
 
     contextualize_q_prompt = ChatPromptTemplate.from_messages(
         [
@@ -203,6 +204,7 @@ just reformulate it if needed and otherwise return it as is. 질문을 생성하
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
     rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
 
+    # 체인결합
     def combined_chain(input_data):
         session_id = input_data.get("session_id")
         user_query = input_data.get("input")

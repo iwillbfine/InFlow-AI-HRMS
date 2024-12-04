@@ -199,7 +199,7 @@ def store_files_in_chroma():
                 continue
 
             for _, row in df.iterrows():
-                content = " ".join([f"{col}: {val}" for col, val in row.items()])
+                content = " ".join([f"{col}:{val} " for col, val in row.items()])
                 documents.append(
                     Document(page_content=content, metadata={"table": csv_file})
                 )
@@ -228,13 +228,13 @@ async def run_batch():
     while True:
         try:
             print(f"Batch started at {datetime.now()}")
-            initialize_directories()
-            export_tables_to_csv()
-            store_files_in_chroma()
+            initialize_directories()  # 1. 디렉토리 초기화 및 생성
+            export_tables_to_csv()  # 2. 모든 테이블 데이터를 CSV로 저장
+            store_files_in_chroma()  # 3. CSV, PDF 데이터를 벡터 DB에 저장
             print(f"Batch completed at {datetime.now()}")
         except Exception as e:
             print(f"Error during batch execution: {e}")
-        await asyncio.sleep(24 * 60 * 60)  # 24시간 대기
+        await asyncio.sleep(24 * 60 * 60)  # 4. 24시간 대기
 
 
 # FastAPI 인스턴스 생성
@@ -281,8 +281,33 @@ async def lifespan(app: FastAPI):
         # 필요시 클린업 작업 추가
 
 
+# Vectorstore 작업 종료 함수
+def close_vectorstore():
+    global vectorstore
+    if vectorstore is not None:
+        vectorstore = None
+        print("Vectorstore closed successfully.")
+
+
+# Lifespan 이벤트 핸들러
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        # 애플리케이션 초기화 시 실행할 작업
+        print("Application starting...")
+        initialize_directories()  # 디렉토리 초기화
+        export_tables_to_csv()  # CSV 생성
+        store_files_in_chroma()  # Vectorstore에 데이터 저장
+        yield  # 애플리케이션 실행
+    finally:
+        # 애플리케이션 종료 시 실행할 작업
+        print("Shutting down...")
+        close_vectorstore()  # Vectorstore 종료
+
+
 # FastAPI 인스턴스에 lifespan 설정
 app = FastAPI(lifespan=lifespan)
+
 
 # 입력 데이터 모델 정의
 class QueryRequest(BaseModel):
@@ -463,7 +488,7 @@ table_name_mapping = {
     "task_type": "과제 유형 테이블 (과제의 분류 및 유형 정보 포함)",
     "business_trip": "출장 테이블 (사원의 출장 기록 및 세부 정보 포함)",
     "leave_return": "복직 테이블 (휴직 후 복직 정보 포함)",
-    "commute": "출퇴근 테이블 (사원의 출퇴근 시간 및 기록 포함)",
+    "commute": "사원별 출퇴근 테이블이력 (사원의 출퇴근 시간 및 기록 포함)",
     "attendance_request_file": "근태 요청 파일 테이블 (근태 요청에 첨부된 파일 정보 포함)",
     "attendance_request": "근태 요청 테이블 (사원의 근태 변경 요청 기록 포함)",
     "attendance_request_type": "근태 요청 유형 테이블 (근태 요청의 분류 및 유형 정보 포함)",
@@ -477,7 +502,7 @@ table_name_mapping = {
     "annual_vacation_promotion_policy": "연차 촉진 정책 테이블 (연차 사용 및 촉진 정책 정보 포함)",
     "vacation_request_file": "휴가 요청 파일 테이블 (휴가 요청에 첨부된 파일 정보 포함)",
     "vacation_request": "휴가 요청 테이블 (사원의 휴가 신청 기록 포함)",
-    "vacation": "휴가 테이블 (휴가 사용 기록 및 상태 정보 포함)",
+    "vacation": "사원별 지급 받은 휴가 테이블 ",
     "vacation_policy": "휴가 정책 테이블 (연차 및 유급/무급 휴가 정책 관련 정보 포함)",
     "vacation_type": "휴가 유형 테이블 (연차, 병가 등 휴가 유형 정보 포함)",
     "department_member": "부서 구성원 테이블 (부서별 소속 사원 정보 포함)",
@@ -498,9 +523,8 @@ table_name_mapping = {
     "position": "직위 테이블 (사원의 직위 정보 포함)",
     "attendance_status_type": "근태 상태 유형 테이블 (출근, 조퇴 등 근태 상태 정보 포함)",
     "department": "부서 테이블 (부서의 이름 및 코드 정보 포함)",
-    "company": "회사 테이블 (회사 정보 및 조직 구조 포함)"
+    "company": "회사 테이블 (회사 정보 및 조직 구조 포함)",
 }
-
 
 
 #  테이블명을 한국어 설명으로 매핑

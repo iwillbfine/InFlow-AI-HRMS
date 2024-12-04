@@ -7,3 +7,5 @@ chromadb_test
 *.bin
 *.sqlite3
 
+chromadb/
+chromadb_test/

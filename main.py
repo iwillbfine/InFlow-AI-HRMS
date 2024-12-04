@@ -1,39 +1,33 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 
-
 # LangChain 관련 모듈
-
-# vectorstore 관련
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.schema import Document  # Document 객체 가져오기
+from langchain.schema import Document
 from langchain_community.vectorstores import Chroma
-
-
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+from langchain_core.runnables.history import RunnableWithMessageHistory
+
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
-
-from langchain_core.runnables import RunnableMap, RunnablePassthrough
 from langchain.chains import RetrievalQA
-from langchain_core.output_parsers import StrOutputParser
+from langchain.schema import HumanMessage, SystemMessage
 
-
-# 에러 문구 트레이스
 import traceback
-
 import uvicorn
 
 # .env 파일 로드
 load_dotenv()
-
 
 # 데이터 경로 설정
 DATA_DIR = r"C:\lecture\FinalProject\InFlow-AI\data"
@@ -59,7 +53,6 @@ async def lifespan(app: FastAPI):
     global vectorstore
 
     try:
-        # PDF와 SQL 파일 로드
         documents = []
         for file in os.listdir(DATA_DIR):
             file_path = os.path.join(DATA_DIR, file)
@@ -70,10 +63,7 @@ async def lifespan(app: FastAPI):
                 loader = TextLoader(file_path, encoding="utf-8")
                 documents.extend(loader.load_and_split())
 
-        # 문서 청크 분할
         split_docs = text_splitter.split_documents(documents)
-
-        # Chroma 벡터 스토어 생성 및 저장
         vectorstore = Chroma.from_documents(
             documents=split_docs,
             embedding=embeddings,
@@ -90,7 +80,6 @@ async def lifespan(app: FastAPI):
 # FastAPI 인스턴스 생성
 app = FastAPI(lifespan=lifespan)
 
-
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
@@ -103,15 +92,36 @@ app.add_middleware(
 # 대화 히스토리 저장소
 chat_history_storage = {}
 
-# 전역 변수로 RAG 체인을 관리
-rag_chain = None
+
+# 입력 데이터 모델 정의
+class QueryRequest(BaseModel):
+    query: str
+    session_id: str
+
+
+def serialize_documents(documents):
+    serialized_docs = []
+    for doc in documents:
+        serialized_docs.append(
+            {
+                "page_content": doc.page_content.replace("\n", " ").replace("\\", ""),
+                "metadata": doc.metadata,
+            }
+        )
+    return serialized_docs
+
+
+def get_or_create_history(session_id):
+    if session_id not in chat_history_storage:
+        chat_history_storage[session_id] = ChatMessageHistory()
+    return chat_history_storage[session_id]
 
 
 # 체인 생성 함수
 def create_chain_with_message_history():
     global rag_chain  # 전역 변수를 사용하도록 선언
 
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})  # 검색 결과 제한
 
     # 질문 문맥화 프롬프트
     contextualize_q_system_prompt = """Given a chat history and the latest user question \
@@ -127,13 +137,19 @@ def create_chain_with_message_history():
     )
 
     # 질문 답변 프롬프트
-    qa_system_prompt = """You are an assistant for question-answering tasks. \
-    Use the following pieces of retrieved context to answer the question. \
-    If you don't know the answer, just say that you don't know. \
-    Keep the answer perfect. Please use imogi with the answer. \
-    대답은 한국어로 하고, 존댓말을 써줘.\
+    qa_system_prompt = """
+    You are an assistant capable of answering questions based on the provided context and the conversation history.
+    Leverage the retrieved context and chat history to provide the most accurate and helpful answer.
 
-    {context}"""
+    If the context or history does not provide enough information, respond as follows:
+    - If you can guess the intent, provide a relevant response or a suggestion.
+    - If no answer can be reasonably inferred, reply politely: "질문에 대해 정확한 답변을 드리기 어려워요. 조금 더 구체적으로 질문해 주시면 감사하겠습니다."
+
+    대답은 반드시 한국어로 작성해 주세요.
+
+    {context}
+    """
+
     qa_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", qa_system_prompt),
@@ -145,11 +161,10 @@ def create_chain_with_message_history():
     # LLM 설정
     llm = ChatOpenAI(
         api_key=OPENAI_API_KEY,
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.2,
     )
 
-    # RunnableWithMessageHistory: 대화 히스토리 관리
     contextualize_chain = RunnableWithMessageHistory(
         runnable=contextualize_q_prompt | llm,
         get_session_history=lambda session_id: chat_history_storage.setdefault(
@@ -159,93 +174,106 @@ def create_chain_with_message_history():
         history_messages_key="history",
     )
 
-    retrieval_qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=retriever,
-        return_source_documents=True,
+    history_aware_retriever = create_history_aware_retriever(
+        llm, retriever, contextualize_q_prompt
     )
+    question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
+    rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
 
-    # 체인을 결합
+    from langchain.schema import HumanMessage, SystemMessage
+
     def combined_chain(input_data):
         session_id = input_data.get("session_id")
         user_query = input_data.get("input")
 
+        # 히스토리 가져오기
+        chat_history = chat_history_storage.get(session_id, ChatMessageHistory())
+        history_as_list = chat_history.messages
+
         # 1. 질문 문맥화 처리
         contextualized_result = contextualize_chain.invoke(
-            {"input": user_query, "history": chat_history_storage.get(session_id, [])},
+            {"input": user_query, "history": history_as_list},
             {"configurable": {"session_id": session_id}},
         )
         print(f"Contextualized Question: {contextualized_result}")
 
-        # 2. QA 체인 실행
-        retrieval_result = retrieval_qa_chain.invoke(
-            {"query": contextualized_result.content, "history": chat_history_storage.get(session_id, [])}
+        # 문맥화된 질문이 비어 있을 경우 처리
+        if not contextualized_result.content.strip():
+            return {
+                "contextualized_question": None,
+                "retrieval_response": "구체적인 HR 관련 질문을 입력해 주세요.",
+                "source_documents": [],
+            }
+
+        # 2. RAG 체인 실행
+        retrieval_result = rag_chain.invoke(
+            {
+                "input": contextualized_result.content,
+                "history": history_as_list,
+            }
         )
         print(f"Retrieval Result: {retrieval_result}")
 
+        # 검색 결과와 히스토리를 결합하여 LLM에게 더 풍부한 컨텍스트 제공
+        combined_context = retrieval_result.get("context", []) + history_as_list
+
+        # 3. 최종 응답 생성
+        llm_input = [
+            SystemMessage(
+                content="You are a helpful assistant. Use the following context and history to answer the user's question."
+            ),
+            HumanMessage(
+                content=f"Context: {combined_context}\n\nQuestion: {contextualized_result.content}"
+            ),
+        ]
+
+        # LLM 호출 (invoke 사용)
+        print(f"LLM Input: {llm_input}")  # LLM Input 출력
+        llm_response = llm.invoke(llm_input)
+        print(f"LLM Response: {llm_response}")  # LLM Response 출력
+
         return {
             "contextualized_question": contextualized_result.content,
-            "retrieval_response": retrieval_result.get("result"),
-            "source_documents": retrieval_result.get("source_documents", []),
+            "retrieval_response": llm_response.content,  # LLM 응답
+            "source_documents": retrieval_result.get("context", []),
         }
 
     return combined_chain
 
 
-
-# 입력 데이터 모델 정의
-class QueryRequest(BaseModel):
-    query: str  # 사용자가 보낼 질문
-    session_id: str  # 세션 ID
-
-
-def serialize_documents(documents):
-    """Document 객체 리스트를 JSON 직렬화가 가능한 딕셔너리 리스트로 변환"""
-    serialized_docs = []
-    for doc in documents:
-        serialized_docs.append(
-            {
-                "page_content": doc.page_content,  # 문서 내용
-                "metadata": doc.metadata,  # 메타데이터
-            }
-        )
-    return serialized_docs
-
-
 @app.post("/query")
 async def query(request: QueryRequest):
     try:
-        # 요청 데이터
         user_input = request.query
         session_id = request.session_id
+        chain = create_chain_with_message_history()
+        response = chain({"input": user_input, "session_id": session_id})
 
-        # 체인 생성
-        chain_with_message_history = create_chain_with_message_history()
-
-        # 체인을 통해 질문 전달 및 응답 처리
-        response = chain_with_message_history(
-            {"input": user_input, "session_id": session_id}
+        # 이스케이프 문자 제거
+        contextualized_question = (
+            response.get("contextualized_question", "")
+            .replace("\n", " ")
+            .replace("\\", "")
         )
+        answer = (
+            response.get("retrieval_response", "답변을 생성하지 못했습니다.")
+            .replace("\n", " ")
+            .replace("\\", "")
+        )
+        serialized_documents = serialize_documents(response.get("source_documents", []))
 
-        # 문서 직렬화
-        serialized_documents = serialize_documents(response["source_documents"])
-
-        # 응답 데이터 구조
         return JSONResponse(
             content={
-                "contextualized_question": response["contextualized_question"],  # 문맥화된 질문
-                "answer": response["retrieval_response"],  # 최종 응답
-                "source_documents": serialized_documents,  # 문서 정보
+                "contextualized_question": contextualized_question,
+                "answer": answer,
+                "source_documents": serialized_documents,
             }
         )
 
     except Exception as e:
-        # 에러 핸들링 및 로그 출력
         error_trace = traceback.format_exc()
         print(f"Error in query: {error_trace}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 
 if __name__ == "__main__":

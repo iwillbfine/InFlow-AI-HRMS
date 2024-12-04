@@ -499,25 +499,6 @@ def create_chain_with_message_history():
         ]
     )
 
-    # 가상의 답변 생성 프롬프트
-    hypothetical_answer_system_prompt = """
-    Create a hypothetical response based on the input question. Ensure that the response is plausible \
-    and aligns with the context of an HR management system. This response will be used to enhance the retrieval process.\
-
-    For example:
-    - Question: "조창욱 사원 정보를 알려줘"
-    - Response: "조창욱 사원은 현재 HR 부서에서 근무 중이며, 직위는 과장입니다. 연락처는 내부 시스템에서 확인 가능합니다."
-
-    질문에 대해 가상의 답변을 생성하세요.
-    """
-
-    hypothetical_answer_prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", hypothetical_answer_system_prompt),
-            ("human", "{input}"),
-        ]
-    )
-
     # 질문 답변 프롬프트
     qa_system_prompt = """
     You are an HR management system chatbot. Use the retrieved context, including the document metadata (table names and descriptions), to generate an accurate and helpful answer.\
@@ -557,15 +538,12 @@ def create_chain_with_message_history():
         history_messages_key="history",
     )
 
-    hypothetical_answer_chain = hypothetical_answer_prompt | llm
-
     history_aware_retriever = create_history_aware_retriever(
         llm, retriever, contextualize_q_prompt
     )
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
     rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
 
-    # 체인결합
     def combined_chain(input_data):
         session_id = input_data.get("session_id")
         user_query = input_data.get("input")
@@ -604,53 +582,39 @@ def create_chain_with_message_history():
             }
 
         # 3. RAG 체인 실행
-        hypothetical_response_input = contextualized_result.content
-        if employee_summary:
-            hypothetical_response_input += f"\n\n사원 요약 정보:\n{employee_summary}"
-        hypothetical_response = hypothetical_answer_chain.invoke(
-            {"input": hypothetical_response_input}
-        )
-        print(f"Hypothetical Answer: {hypothetical_response}")
-        print()
-
-        # 4. RAG 체인 실행
         retrieval_result = rag_chain.invoke(
             {
-                "input": hypothetical_response.content,
+                "input": contextualized_result.content,
                 "history": history_as_list,
             }
         )
         print(f"Retrieval Result: {retrieval_result}")
         print()
 
-        # 5. RAG 결과와 사원 데이터 결합
-        combined_context = annotate_with_table_names(
-            retrieval_result.get("context", [])
+        # 4. RAG 결과와 사원 데이터 결합
+        combined_context = (
+            annotate_with_table_names(retrieval_result.get("context", []))
+            + history_as_list
         )
-        
+
         # 사원 요약 정보를 Document 객체로 추가
         if employee_summary:
             # 텍스트 청킹을 위한 TextSplitter 초기화
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=1000, chunk_overlap=200
+            )
 
             # 사원 요약 정보를 Document로 생성
             employee_summary_document = Document(
                 page_content=f"질문한 사원의 요약 정보:\n{employee_summary}",
-                metadata={"source": "employee_summary"}
+                metadata={"source": "employee_summary"},
             )
 
             # 요약 정보를 분할하여 Document로 변환
             split_documents = text_splitter.split_documents([employee_summary_document])
             combined_context.extend(split_documents)
-        
-        # if employee_summary:  # 사원 요약 정보를 combined_context에 추가
-        #     employee_summary_document = {
-        #         "page_content": f"질문한 사원의 요약 정보:\n{employee_summary}",
-        #         "metadata": {"source": "employee_summary"},
-        #     }
-        #     combined_context.append(employee_summary_document)
 
-        # 6. 최종 LLM 입력 구성
+        # 5. 최종 LLM 입력 구성
         llm_input = [
             SystemMessage(
                 content="You are a helpful assistant. Use the following context and history to answer the user's question."

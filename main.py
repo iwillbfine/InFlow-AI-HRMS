@@ -606,7 +606,7 @@ def create_chain_with_message_history():
 
             # 사원 요약 정보를 Document로 생성
             employee_summary_document = Document(
-                page_content=f"질문한 사원의 요약 정보:\n{employee_summary}",
+                page_content=f"질문한 사원(사용자)의 요약 정보:\n{employee_summary}",
                 metadata={"source": "employee_summary"},
             )
 
@@ -697,6 +697,7 @@ async def query(request: QueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# 특정 사원의 데이터를 요약하여 LLM에서 활용할 수 있는 간단한 형태로 변환.
 def summarize_employee_data(employee_data, employee_id):
     """
     특정 사원의 데이터를 요약하여 LLM에서 활용할 수 있는 간단한 형태로 변환.
@@ -708,31 +709,13 @@ def summarize_employee_data(employee_data, employee_id):
     Returns:
         str: 요약된 데이터 문자열.
     """
-
-    print(f"전달 받은 사원의 데이터 {employee_id}: {employee_data}")
+    employee_name = employee_data.get("employee_name", "알 수 없음")
+    print(
+        f"전달 받은 사원의 데이터 {employee_id} (이름: {employee_name}): {employee_data}"
+    )
     print()
 
-    summaries = []
-
-    # 휴가 데이터 요약
-    vacations = employee_data.get("vacation", [])
-
-
-def summarize_employee_data(employee_data, employee_id):
-    """
-    특정 사원의 데이터를 요약하여 LLM에서 활용할 수 있는 간단한 형태로 변환.
-
-    Args:
-        employee_data (dict): 전체 사원 데이터.
-        employee_id (int): 요약할 사원의 ID.
-
-    Returns:
-        str: 요약된 데이터 문자열.
-    """
-    print(f"전달 받은 사원의 데이터 {employee_id}: {employee_data}")
-    print()
-
-    summaries = []
+    summaries = [f"사원 이름: {employee_name[0]["name"]}"]  # 사원 이름 추가
 
     # 연차 데이터 요약
     vacations = employee_data.get("vacation", [])
@@ -782,33 +765,86 @@ def fetch_employee_data(employee_id):
     try:
         engine = connect_sqlalchemy()  # 데이터베이스 연결 엔진
         with engine.connect() as connection:
-            # 각 테이블에서 데이터를 조회
-            vacation_query = f"SELECT * FROM vacation WHERE employee_id = {employee_id}"
-            evaluation_query = (
-                f"SELECT * FROM evaluation WHERE employee_id = {employee_id}"
-            )
-            commute_query = f"SELECT * FROM commute WHERE employee_id = {employee_id}"
 
-            vacation_data = (
-                pd.read_sql(vacation_query, connection)
+            # 각 테이블에서 데이터를 조회
+
+            employee_query = text(
+                "SELECT name FROM employee WHERE employee_id = :employee_id"
+            )
+            vacation_query = text(
+                "SELECT * FROM vacation WHERE employee_id = :employee_id"
+            )
+            evaluation_query = text(
+                "SELECT * FROM evaluation WHERE employee_id = :employee_id"
+            )
+            commute_query = text(
+                "SELECT * FROM commute WHERE employee_id = :employee_id"
+            )
+
+            employee_data = (
+                pd.read_sql(
+                    employee_query, connection, params={"employee_id": employee_id}
+                )
                 .where(
-                    pd.notnull(pd.read_sql(vacation_query, connection)), None
+                    pd.notnull(
+                        pd.read_sql(
+                            employee_query,
+                            connection,
+                            params={"employee_id": employee_id},
+                        )
+                    ),
+                    None,
+                )  # NaN을 None으로 변환
+                .replace([float("inf"), float("-inf")], None)
+                .to_dict(orient="records")
+            )
+            vacation_data = (
+                pd.read_sql(
+                    vacation_query, connection, params={"employee_id": employee_id}
+                )
+                .where(
+                    pd.notnull(
+                        pd.read_sql(
+                            vacation_query,
+                            connection,
+                            params={"employee_id": employee_id},
+                        )
+                    ),
+                    None,
                 )  # NaN을 None으로 변환
                 .replace([float("inf"), float("-inf")], None)
                 .to_dict(orient="records")
             )
             evaluation_data = (
-                pd.read_sql(evaluation_query, connection)
+                pd.read_sql(
+                    evaluation_query, connection, params={"employee_id": employee_id}
+                )
                 .where(
-                    pd.notnull(pd.read_sql(evaluation_query, connection)), None
+                    pd.notnull(
+                        pd.read_sql(
+                            evaluation_query,
+                            connection,
+                            params={"employee_id": employee_id},
+                        )
+                    ),
+                    None,
                 )  # NaN을 None으로 변환
                 .replace([float("inf"), float("-inf")], None)
                 .to_dict(orient="records")
             )
             commute_data = (
-                pd.read_sql(commute_query, connection)
+                pd.read_sql(
+                    commute_query, connection, params={"employee_id": employee_id}
+                )
                 .where(
-                    pd.notnull(pd.read_sql(commute_query, connection)), None
+                    pd.notnull(
+                        pd.read_sql(
+                            commute_query,
+                            connection,
+                            params={"employee_id": employee_id},
+                        )
+                    ),
+                    None,
                 )  # NaN을 None으로 변환
                 .replace([float("inf"), float("-inf")], None)
                 .to_dict(orient="records")
@@ -816,6 +852,7 @@ def fetch_employee_data(employee_id):
 
         # 모든 데이터 직렬화
         return {
+            "employee_name": serialize_data(employee_data),  # 사원 이름 추가
             "vacation": serialize_data(vacation_data),
             "evaluation": serialize_data(evaluation_data),
             "commute": serialize_data(commute_data),

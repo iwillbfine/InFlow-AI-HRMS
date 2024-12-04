@@ -1,2 +1,9 @@
 # Environment variables
 .env
+
+# .gitignore에 추가
+chromadb
+chromadb_test
+*.bin
+*.sqlite3
+

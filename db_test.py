@@ -104,7 +104,7 @@ def store_csv_in_chroma():
         # Chroma DB에 저장
         vectorstore = Chroma.from_documents(
             documents=split_docs,
-            embedding=embeddings, # 임베딩 함수 전달
+            embedding=embeddings,  # 임베딩 함수 전달
             persist_directory=CHROMA_DB_DIR,
         )
         print("Data stored in Chroma DB.")
@@ -116,10 +116,9 @@ def store_csv_in_chroma():
 def test_rag_query():
     global vectorstore  # 글로벌 변수 사용
     try:
-
         # 질문 테스트
-        query = "사원의 잔여 휴가 일수는?"
-        retriever = vectorstore.as_retriever(search_kwargs={"k": 3})  # 검색 결과 제한
+        query = "윤지혜 사원의 잔여 휴가 일수는?"
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 5})  # 검색 결과 제한
         results = retriever.get_relevant_documents(query)
 
         print("Query:", query)

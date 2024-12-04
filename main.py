@@ -37,7 +37,8 @@ from langchain_core.runnables.history import (
 )  # 대화 히스토리를 처리하는 실행 가능 체인
 from langchain_community.chat_message_histories import (
     ChatMessageHistory,
-)  
+)
+
 # 대화 메시지 히스토리 관리
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
@@ -119,12 +120,13 @@ class QueryRequest(BaseModel):
     session_id: str
 
 
+# 답변 문서 serializing
 def serialize_documents(documents):
     serialized_docs = []
     for doc in documents:
         serialized_docs.append(
             {
-                "page_content": doc.page_content.replace("\n", " ").replace("\\", ""),
+                "page_content": doc.page_content.replace("\\", ""),
                 "metadata": doc.metadata,
             }
         )
@@ -215,6 +217,7 @@ just reformulate it if needed and otherwise return it as is. 질문을 생성하
             {"configurable": {"session_id": session_id}},
         )
         print(f"Contextualized Question: {contextualized_result}")
+        print()
 
         # 문맥화된 질문이 비어 있을 경우 처리
         if not contextualized_result.content.strip():
@@ -232,6 +235,7 @@ just reformulate it if needed and otherwise return it as is. 질문을 생성하
             }
         )
         print(f"Retrieval Result: {retrieval_result}")
+        print()
 
         # 검색 결과와 히스토리를 결합하여 LLM에게 더 풍부한 컨텍스트 제공
         combined_context = retrieval_result.get("context", []) + history_as_list
@@ -247,9 +251,9 @@ just reformulate it if needed and otherwise return it as is. 질문을 생성하
         ]
 
         # LLM 호출 (invoke 사용)
-        print(f"LLM Input: {llm_input}")  # LLM Input 출력
         llm_response = llm.invoke(llm_input)
         print(f"LLM Response: {llm_response}")  # LLM Response 출력
+        print()
 
         return {
             "contextualized_question": contextualized_result.content,
@@ -265,26 +269,37 @@ async def query(request: QueryRequest):
     try:
         user_input = request.query
         session_id = request.session_id
+
+        # 체인 생성 및 실행
         chain = create_chain_with_message_history()
         response = chain({"input": user_input, "session_id": session_id})
 
         # 이스케이프 문자 제거
-        contextualized_question = (
-            response.get("contextualized_question", "")
-            .replace("\n", " ")
-            .replace("\\", "")
+        contextualized_question = response.get("contextualized_question", "").replace(
+            "\\", ""
         )
-        answer = (
-            response.get("retrieval_response", "답변을 생성하지 못했습니다.")
-            .replace("\\", "")
-        )
+        answer = response.get(
+            "retrieval_response", "답변을 생성하지 못했습니다."
+        ).replace("\\", "")
+
         serialized_documents = serialize_documents(response.get("source_documents", []))
+
+        # 히스토리 가져오기
+        chat_history = get_or_create_history(session_id)
+        serialized_history = [
+            {
+                "type": message.type,  # 메시지 타입 (human/system 등)
+                "content": message.content.replace("\n", " ").replace("\\", ""),
+            }
+            for message in chat_history.messages
+        ]
 
         return JSONResponse(
             content={
                 "contextualized_question": contextualized_question,
                 "answer": answer,
                 "source_documents": serialized_documents,
+                "history": serialized_history,  # 대화 히스토리 추가
             }
         )
 

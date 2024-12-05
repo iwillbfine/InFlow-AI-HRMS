@@ -498,15 +498,15 @@ def create_chain_with_message_history():
 
     # 질문 문맥화 프롬프트
     contextualize_q_system_prompt = """
-    Given a chat history, the latest user question, employee summary information, \
+    Given a chat history, the latest user question, employee summary information (included in the first history message), \
     and metadata about the HR management system tables, formulate a standalone question. \
     The standalone question must be understandable without the chat history and \
-    should utilize the given employee summary and table metadata if relevant. 
+    should utilize the given employee summary (from the first history message) and table metadata if relevant. 
 
     Instructions:
-    1. Focus only on reformulating or generating a question. Do NOT provide an answer.
-    2. If the user question references their own data (e.g., vacation days, department), \
-    use the employee summary information to create a standalone question.
+    1. Assume that the first message in the chat history contains a summary of the employee's information.
+    2. If the user question references their own data (e.g., vacation days, department, attendance), \
+    use the employee summary in the first history message to create a standalone question.
     3. If the user question references broader HR concepts (e.g., policies, table details), \
     use the table metadata to formulate a clear and specific question.
     4. If the input is ambiguous or not a question, generate a plausible question \
@@ -514,13 +514,34 @@ def create_chain_with_message_history():
 
     **Do NOT answer the question. Only generate or reformulate the question.**
 
-    Examples:
+     Examples:
     - User input: "What about my vacation?"
-    Reformulated: "What are the details of my remaining vacation days, and how is this information tracked in the HR management system?"
+    Reformulated: "What are the details of my remaining vacation days?"
     - User input: "How does our system track attendance?"
     Reformulated: "How does the HR system record and manage employee attendance data, including remote work and overtime?"
     - User input: "Can I take time off next week?"
     Reformulated: "What is the process for requesting time off, and do I have enough vacation days available?"
+    
+    Examples:
+    - Chat History:
+    1. "Employee Summary: Name: John Doe, Role: Manager, Department: HR, Vacation: 10 days remaining."
+    2. User input: "What about my vacation?"
+    Reformulated: "What are the details of my remaining vacation days (10 days)?"
+
+    - Chat History:
+    1. "Employee Summary: Name: Jane Smith, Role: Developer, Department: IT, Attendance: Last record on 2024-12-01."
+    2. User input: "What about attendance?"
+    Reformulated: "What is the process for checking my attendance records?"
+
+    - Chat History:
+    1. "Employee Summary: Name: Michael Johnson, Role: Analyst, Department: Finance, Evaluation: 2024 Score: A."
+    2. User input: "How are evaluations handled?"
+    Reformulated: "How does the HR system manage employee evaluations?"
+
+    Generate the best possible standalone question that aligns with the user’s intent, considering the provided employee summary and HR table metadata.
+
+
+    **Do NOT answer the question. Only generate or reformulate the question.**
 
     Create the best possible standalone question that aligns with the user’s intent.
 
@@ -561,7 +582,7 @@ def create_chain_with_message_history():
     Example:
     - Question: "How many vacation days do I have left?"
     Context: Vacation Table Metadata, Employee Summary
-    Response: "현재 사용 가능하신 연차는 10일이고, 병가는 2일 남아 있습니다. 추가 휴가 신청은 HR 시스템의 연차 관리 메뉴에서 가능하십니다."
+    Response: "현재 사용 가능하신 연차는 10일이고, 병가는 2일 남아 있습니다."
 
     - Question: "How is my department structured?"
     Context: Department Table Metadata, Employee Summary
@@ -610,17 +631,22 @@ def create_chain_with_message_history():
         chat_history = chat_history_storage.get(session_id, ChatMessageHistory())
         history_as_list = chat_history.messages
 
-        # 1. 사원 데이터 조회 및 요약
-        employee_data = {}
+        # 1. 사원 데이터 요약 생성 (히스토리에 추가하지 않음)
         employee_summary = ""
+        employee_summary_document = None
         if employee_id:
+            # DB에서 사원 데이터를 조회하고 요약
             employee_data = fetch_employee_data(employee_id)
-            # print(f"Employee Data for ID {employee_id}: {employee_data}")
-            # print()
             employee_summary_text = summarize_employee_data(employee_data, employee_id)
             employee_summary = generate_employee_summary_text(employee_summary_text)
 
-        print(f"Employee summary Data for ID {employee_id}: {employee_summary_text}")
+            # 사원 요약 정보를 Document로 생성
+            employee_summary_document = Document(
+                page_content=f"질문한 사원(사용자)의 요약 정보:\n{employee_summary}",
+                metadata={"source": "employee_summary"},
+            )
+
+        print(f"Employee summary Data for ID {employee_id}: {employee_summary}")
         print()
 
         # 2. 질문 문맥화 처리
@@ -655,20 +681,11 @@ def create_chain_with_message_history():
             + history_as_list
         )
 
-        # 사원 요약 정보를 Document 객체로 추가
-        if employee_summary:
-            # 텍스트 청킹을 위한 TextSplitter 초기화
+        # 사원 요약 정보를 combined_context에 추가
+        if employee_summary_document:
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=500, chunk_overlap=50
             )
-
-            # 사원 요약 정보를 Document로 생성
-            employee_summary_document = Document(
-                page_content=f"질문한 사원(사용자)의 요약 정보:\n{employee_summary}",
-                metadata={"source": "employee_summary"},
-            )
-
-            # 요약 정보를 분할하여 Document로 변환
             split_documents = text_splitter.split_documents([employee_summary_document])
             combined_context.extend(split_documents)
 
@@ -693,7 +710,7 @@ def create_chain_with_message_history():
             "contextualized_question": contextualized_result.content,
             "retrieval_response": llm_response.content,  # LLM 응답
             "source_documents": retrieval_result.get("context", []),
-            "employee_data": employee_data,  # 응답에 사원 데이터 추가
+            "employee_data": employee_data,  # 사원 데이터 반환
         }
 
     return combined_chain

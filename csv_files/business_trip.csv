@@ -1,0 +1,2 @@
+business_trip_id,start_date,end_date,trip_type,destination,employee_id,attendance_request_id
+1,2024-11-12 09:00:00,2024-12-12 18:00:00,DISPATCH,부산 사무소,4,4

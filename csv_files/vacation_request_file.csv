@@ -1,0 +1,6 @@
+vacation_request_file_id,file_name,file_url,vacation_request_id
+1,홍길동_휴가_증빙자료,https://example.com/files/vacation_request_1.pdf,4
+2,김영희_휴가_증빙자료,https://example.com/files/vacation_request_2.pdf,2
+3,박철수_휴가_증빙자료,https://example.com/files/vacation_request_3.pdf,3
+4,홍길동_휴가_증빙자료,https://example.com/files/vacation_request_4.pdf,4
+5,최강욱_휴가_증빙자료,https://example.com/files/vacation_request_5.pdf,5

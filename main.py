@@ -56,6 +56,12 @@ import asyncio  # 시간 대기를 위한 모듈
 import traceback  # 에러 디버깅 및 트레이스백 추적
 import uvicorn  # FastAPI 서버 실행
 
+# 로깅 설정
+import time
+import logging
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 
 # .env 파일 로드
 load_dotenv()
@@ -89,14 +95,19 @@ vectorstore = None
 
 # CSV 디렉토리와 Chroma DB 디렉토리를 초기화 및 생성
 def initialize_directories():
-    # 디렉토리 초기화
+    # Chroma DB 디렉토리 초기화
     if os.path.exists(CHROMA_DB_DIR):
-        shutil.rmtree(CHROMA_DB_DIR)
-    os.makedirs(CHROMA_DB_DIR, exist_ok=True)
+        shutil.rmtree(CHROMA_DB_DIR)  # 기존 Chroma DB 디렉토리 삭제
+        print(f"Cleared Chroma DB directory: {CHROMA_DB_DIR}")
+    os.makedirs(CHROMA_DB_DIR, exist_ok=True)  # Chroma DB 디렉토리 재생성
+    print(f"Created Chroma DB directory: {CHROMA_DB_DIR}")
 
+    # CSV 디렉토리 초기화
     if os.path.exists(CSV_DIR):
-        shutil.rmtree(CSV_DIR)
-    os.makedirs(CSV_DIR, exist_ok=True)
+        shutil.rmtree(CSV_DIR)  # 기존 CSV 디렉토리 삭제
+        print(f"Cleared CSV directory: {CSV_DIR}")
+    os.makedirs(CSV_DIR, exist_ok=True)  # CSV 디렉토리 재생성
+    print(f"Created CSV directory: {CSV_DIR}")
 
 
 # SQLAlchemy 엔진 생성(mariadb )
@@ -478,6 +489,9 @@ def annotate_with_table_names(documents):
 def create_chain_with_message_history():
     global rag_chain  # 전역 변수를 사용하도록 선언
 
+    # retriever = vectorstore.as_retriever(
+    #     search_type="cosine", search_kwargs={"fetch_k": 5, "k": 3}
+    # )
     retriever = vectorstore.as_retriever(
         search_type="mmr", search_kwargs={"lambda_mult": 0.9, "fetch_k": 10, "k": 3}
     )
@@ -504,12 +518,12 @@ def create_chain_with_message_history():
     You are an HR management system chatbot. Use the retrieved context, including the document metadata (table names and descriptions), to generate an accurate and helpful answer.\
 
     For each table referenced in the retrieved context, include its Korean name and description in the response if relevant.\
-
+    
     If the context or history does not provide enough information, respond as follows:\
     - If you can guess the intent, provide a relevant response or a suggestion.\
     - If no answer can be reasonably inferred, reply politely: "질문에 대해 정확한 답변을 드리기 어려워요. 조금 더 구체적으로 질문해 주시면 감사하겠습니다."\
 
-    대답은 반드시 한국어로 작성하고, 반드시 존댓말을 써주세요.\
+    대답은 반드시 한국어스럽게 작성하고, 반드시 존댓말을 써주세요.\
 
     {context}
     """
@@ -558,8 +572,8 @@ def create_chain_with_message_history():
         employee_summary = ""
         if employee_id:
             employee_data = fetch_employee_data(employee_id)
-            print(f"Employee Data for ID {employee_id}: {employee_data}")
-            print()
+            # print(f"Employee Data for ID {employee_id}: {employee_data}")
+            # print()
             employee_summary = summarize_employee_data(employee_data, employee_id)
 
         print(f"Employee summary Data for ID {employee_id}: {employee_summary}")
@@ -601,7 +615,7 @@ def create_chain_with_message_history():
         if employee_summary:
             # 텍스트 청킹을 위한 TextSplitter 초기화
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000, chunk_overlap=200
+                chunk_size=500, chunk_overlap=50
             )
 
             # 사원 요약 정보를 Document로 생성
@@ -647,6 +661,10 @@ employee_data = {}
 
 @app.post("/query")
 async def query(request: QueryRequest):
+
+    # 실행 시간 측정
+    start_time = time.time()
+
     global employee_data
     try:
         user_input = request.query
@@ -689,6 +707,11 @@ async def query(request: QueryRequest):
         }
         # JSON 직렬화 보장
         serialized_response = serialize_data(response_content)
+
+        end_time = time.time()
+        # 실행 시간 로그 출력
+        execution_time = end_time - start_time
+        logging.info(f"실행 시간: {execution_time:.2f} seconds.")
         return JSONResponse(content=serialized_response)
 
     except Exception as e:
@@ -710,17 +733,17 @@ def summarize_employee_data(employee_data, employee_id):
         str: 요약된 데이터 문자열.
     """
     employee_name = employee_data.get("employee_name", "알 수 없음")
-    print(
-        f"전달 받은 사원의 데이터 {employee_id} (이름: {employee_name}): {employee_data}"
-    )
-    print()
+    # print(
+    #     f"전달 받은 사원의 데이터 {employee_id} (이름: {employee_name}): {employee_data}"
+    # )
+    # print()
 
     summaries = [f"사원 이름: {employee_name[0]["name"]}"]  # 사원 이름 추가
 
     # 연차 데이터 요약
     vacations = employee_data.get("vacation", [])
-    print(f"휴가 데이터 (전체): {vacations}")
-    print()
+    # print(f"휴가 데이터 (전체): {vacations}")
+    # print()
     if vacations:  # vacation 데이터가 비어 있지 않은 경우
         vacation_summary = "\n".join(
             f"- {vacation.get('vacation_name', '이름 없음')}: 남은 {vacation.get('vacation_left', 0)}일, 사용 {vacation.get('vacation_used', 0)}일"

@@ -1,0 +1,2 @@
+company_id,company_name,ceo,ceo_signature,business_registration_number,company_address,company_phone_number,company_stamp_url,company_logo_url
+1,파도파도,윤채연,https://inflow-company.s3.ap-northeast-2.amazonaws.com/ceo_signature.png,229-81-30104,서울 동작구 보라매로 87,02-1234-5678,https://inflow-company.s3.ap-northeast-2.amazonaws.com/company_stamp.png,https://inflow-company.s3.ap-northeast-2.amazonaws.com/company_logo.png

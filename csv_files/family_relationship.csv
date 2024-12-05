@@ -1,0 +1,7 @@
+family_relationship_code,family_relationship_name
+SPOUSE,배우자
+SELF,본인
+PARENT,부모
+CHILD,자녀
+GRANDPARENT,조부모
+SIBLING,형제자매

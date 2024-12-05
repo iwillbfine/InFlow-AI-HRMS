@@ -1,0 +1,6 @@
+language_test_id,language_test_name,qualification_number,issuer,qualified_at,grade_score,employee_id,language_code
+1,TOEIC,123456789,ETS,2023-11-01 09:00:00,550,1,EN
+2,JLPT N1,987654321,JLPT,2024-02-10 09:00:00,PASS,2,JP
+3,HSK 5급,223344556,HSK,2023-12-05 09:00:00,PASS,3,CN
+4,DELF B2,334455667,CIEP,2024-01-15 09:00:00,PASS,4,FR
+5,TestDaF,445566778,Goethe-Institut,2024-03-01 09:00:00,C1,5,DE

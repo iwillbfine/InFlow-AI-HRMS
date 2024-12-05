@@ -1,0 +1,7 @@
+task_type_eval_id,task_type_total_score,created_at,evaluation_id,evaluation_policy_id
+1,36.04,2023-07-01,2,1
+2,29.1,2023-07-01,2,2
+3,30.0,2023-07-01,2,3
+4,40.0,2023-07-01,1,1
+5,30.0,2023-07-01,1,2
+6,30.0,2023-07-01,1,3

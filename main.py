@@ -795,7 +795,7 @@ def summarize_employee_data(employee_data, employee_id):
     employee_name = employee_data.get("employee_name", [{"name": "알 수 없음"}])
     summary = {
         "employee_id": employee_id,
-        "employee_name": employee_name[0].get("name", "알 수 없음"),
+        "employee_name": employee_name,
         "role_info": employee_data.get("role", [{}])[0],
         "duty_info": employee_data.get("duty", [{}])[0],
         "position_info": employee_data.get("position", [{}])[0],

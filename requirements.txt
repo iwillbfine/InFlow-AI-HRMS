@@ -1,7 +1,28 @@
+# FastAPI 및 관련 라이브러리
 fastapi
-uvicorn
-langchain
-chromadb
+uvicorn[standard]
+pydantic
+
+# LangChain 및 관련 라이브러리
+langchain-community
+langchain-openai
+langchain-core
+langchain-schema
+
+# 문서 처리
+pandas
+sqlalchemy
+PyPDF2
 python-dotenv
-openai
-pymysql
+
+# 비동기 및 병렬 처리
+asyncio
+
+# 추가 유틸리티
+shutil
+datetime
+concurrent.futures
+
+# 로깅 및 디버깅
+logging
+traceback

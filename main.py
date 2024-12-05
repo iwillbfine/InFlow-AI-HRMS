@@ -202,55 +202,55 @@ def store_files_in_chroma():
     # 데이터 결합용 임시 저장소
     employee_data = {}
 
-    # CSV 파일 처리
-    for csv_file in os.listdir(CSV_DIR):
-        if csv_file.endswith(".csv"):
-            csv_path = os.path.join(CSV_DIR, csv_file)
-            df = pd.read_csv(csv_path)
+    # # CSV 파일 처리
+    # for csv_file in os.listdir(CSV_DIR):
+    #     if csv_file.endswith(".csv"):
+    #         csv_path = os.path.join(CSV_DIR, csv_file)
+    #         df = pd.read_csv(csv_path)
 
-            if df.empty:
-                print(f"Skipped empty file: {csv_file}")
-                continue
+    #         if df.empty:
+    #             print(f"Skipped empty file: {csv_file}")
+    #             continue
 
-            # 테이블별 데이터 처리
-            for _, row in df.iterrows():
-                if "employee_id" in row:
-                    emp_id = row["employee_id"]
-                    # 직원 데이터를 임시 저장소에 추가
-                    if emp_id not in employee_data:
-                        employee_data[emp_id] = {}
-                    employee_data[emp_id][csv_file] = row.to_dict()
+    #         # 테이블별 데이터 처리
+    #         for _, row in df.iterrows():
+    #             if "employee_id" in row:
+    #                 emp_id = row["employee_id"]
+    #                 # 직원 데이터를 임시 저장소에 추가
+    #                 if emp_id not in employee_data:
+    #                     employee_data[emp_id] = {}
+    #                 employee_data[emp_id][csv_file] = row.to_dict()
 
-    # 직원별 데이터를 문장으로 변환
-    for emp_id, tables in employee_data.items():
-        content_parts = []
-        for table_name, row_data in tables.items():
-            if table_name == "vacation.csv":
-                content_parts.append(
-                    f"사원 ID {emp_id}: 남은 연차 {row_data.get('remaining_days', 0)}일, "
-                    f"병가 {row_data.get('sick_leave_used', 0)}일 사용."
-                )
-            elif table_name == "evaluation.csv":
-                content_parts.append(
-                    f"사원 ID {emp_id}: 평가 등급 {row_data.get('grade', 'N/A')}, "
-                    f"평가 점수 {row_data.get('score', 'N/A')}."
-                )
-            elif table_name == "commute.csv":
-                content_parts.append(
-                    f"사원 ID {emp_id}: 최근 출근 상태 {row_data.get('status', 'N/A')}."
-                )
-            else:
-                # 기타 테이블 데이터 처리
-                table_content = " ".join(
-                    [f"{key}:{value}" for key, value in row_data.items()]
-                )
-                content_parts.append(f"{table_name}: {table_content}")
+    # # 직원별 데이터를 문장으로 변환
+    # for emp_id, tables in employee_data.items():
+    #     content_parts = []
+    #     for table_name, row_data in tables.items():
+    #         if table_name == "vacation.csv":
+    #             content_parts.append(
+    #                 f"사원 ID {emp_id}: 남은 연차 {row_data.get('remaining_days', 0)}일, "
+    #                 f"병가 {row_data.get('sick_leave_used', 0)}일 사용."
+    #             )
+    #         elif table_name == "evaluation.csv":
+    #             content_parts.append(
+    #                 f"사원 ID {emp_id}: 평가 등급 {row_data.get('grade', 'N/A')}, "
+    #                 f"평가 점수 {row_data.get('score', 'N/A')}."
+    #             )
+    #         elif table_name == "commute.csv":
+    #             content_parts.append(
+    #                 f"사원 ID {emp_id}: 최근 출근 상태 {row_data.get('status', 'N/A')}."
+    #             )
+    #         else:
+    #             # 기타 테이블 데이터 처리
+    #             table_content = " ".join(
+    #                 [f"{key}:{value}" for key, value in row_data.items()]
+    #             )
+    #             content_parts.append(f"{table_name}: {table_content}")
 
-        # 최종 문서 생성
-        full_content = " ".join(content_parts)
-        documents.append(
-            Document(page_content=full_content, metadata={"employee_id": emp_id})
-        )
+    #     # 최종 문서 생성
+    #     full_content = " ".join(content_parts)
+    #     documents.append(
+    #         Document(page_content=full_content, metadata={"employee_id": emp_id})
+    #     )
 
     # PDF 파일 처리
     for file in os.listdir(DATA_DIR):
@@ -277,7 +277,7 @@ async def run_batch():
         try:
             print(f"Batch started at {datetime.now()}")
             initialize_directories()  # 1. 디렉토리 초기화 및 생성
-            export_tables_to_csv()  # 2. 모든 테이블 데이터를 CSV로 저장
+            # export_tables_to_csv()  # 2. 모든 테이블 데이터를 CSV로 저장
             store_files_in_chroma()  # 3. CSV, PDF 데이터를 벡터 DB에 저장
             print(f"Batch completed at {datetime.now()}")
         except Exception as e:
@@ -309,8 +309,8 @@ async def lifespan(app: FastAPI):
         print("Initializing directories...")
         initialize_directories()
 
-        print("Exporting tables to CSV...")
-        export_tables_to_csv()
+        # print("Exporting tables to CSV...")
+        # export_tables_to_csv()
 
         print("Storing files in Chroma...")
         store_files_in_chroma()
@@ -497,12 +497,34 @@ def create_chain_with_message_history():
     )
 
     # 질문 문맥화 프롬프트
-    contextualize_q_system_prompt = """Given a chat history and the latest user question \
-    which might reference context in the chat history, formulate a standalone question \
-    which can be understood without the chat history. If the input is not a question, \
-    generate a plausible question that matches the intent. Do NOT answer the question, \
-    just reformulate or generate it. 
-    
+    contextualize_q_system_prompt = """
+    Given a chat history, the latest user question, employee summary information, \
+    and metadata about the HR management system tables, formulate a standalone question. \
+    The standalone question must be understandable without the chat history and \
+    should utilize the given employee summary and table metadata if relevant. 
+
+    Instructions:
+    1. Focus only on reformulating or generating a question. Do NOT provide an answer.
+    2. If the user question references their own data (e.g., vacation days, department), \
+    use the employee summary information to create a standalone question.
+    3. If the user question references broader HR concepts (e.g., policies, table details), \
+    use the table metadata to formulate a clear and specific question.
+    4. If the input is ambiguous or not a question, generate a plausible question \
+    that aligns with the user’s intent based on the provided information.
+
+    **Do NOT answer the question. Only generate or reformulate the question.**
+
+    Examples:
+    - User input: "What about my vacation?"
+    Reformulated: "What are the details of my remaining vacation days, and how is this information tracked in the HR management system?"
+    - User input: "How does our system track attendance?"
+    Reformulated: "How does the HR system record and manage employee attendance data, including remote work and overtime?"
+    - User input: "Can I take time off next week?"
+    Reformulated: "What is the process for requesting time off, and do I have enough vacation days available?"
+
+    Create the best possible standalone question that aligns with the user’s intent.
+
+
     질문을 생성하세요."""
 
     contextualize_q_prompt = ChatPromptTemplate.from_messages(
@@ -515,16 +537,37 @@ def create_chain_with_message_history():
 
     # 질문 답변 프롬프트
     qa_system_prompt = """
-    You are an HR management system chatbot. Use the retrieved context, including the document metadata (table names and descriptions), to generate an accurate and helpful answer.\
+    You are an advanced HR management system chatbot.
 
-    For each table referenced in the retrieved context, include its Korean name and description in the response if relevant.\
-    
-    If the context or history does not provide enough information, respond as follows:\
-    - If you can guess the intent, provide a relevant response or a suggestion.\
-    - If no answer can be reasonably inferred, reply politely: "질문에 대해 정확한 답변을 드리기 어려워요. 조금 더 구체적으로 질문해 주시면 감사하겠습니다."\
+    Your task is to provide accurate, polite, and helpful answers in Korean using the \
+    retrieved context, employee summary information, and HR table metadata.
 
-    대답은 반드시 한국어스럽게 작성하고, 반드시 존댓말을 써주세요.\
+    Instructions:
+    1. Use the retrieved context to answer the question accurately.
+    2. If the question references employee-specific data (e.g., vacation, attendance), \
+    utilize the provided employee summary information in the answer.
+    3. If the question involves HR system functionalities or policies, include \
+    relevant HR table metadata (e.g., table names, descriptions) in the explanation.
+    4. If no clear answer can be provided:
+    - Guess the user’s intent based on the context and give a relevant suggestion.
+    - If no reasonable inference can be made, respond politely:
+        "질문에 대해 정확한 답변을 드리기 어려워요. 조금 더 구체적으로 질문해 주시면 감사하겠습니다."
 
+    Guidelines:
+    - Write in polite Korean (존댓말).
+    - Make the response conversational and user-friendly.
+    - Avoid including unnecessary technical details unless requested.
+
+    Example:
+    - Question: "How many vacation days do I have left?"
+    Context: Vacation Table Metadata, Employee Summary
+    Response: "현재 사용 가능하신 연차는 10일이고, 병가는 2일 남아 있습니다. 추가 휴가 신청은 HR 시스템의 연차 관리 메뉴에서 가능하십니다."
+
+    - Question: "How is my department structured?"
+    Context: Department Table Metadata, Employee Summary
+    Response: "사용자님이 속한 부서는 '인사부'입니다. 부서 구성원은 총 12명으로 구성되어 있으며, 세부 정보는 다음과 같습니다: 홍길동(팀원), 이준석(팀원), ..."
+
+    Use the following context and employee summary information to answer the user’s question:
     {context}
     """
 
@@ -574,9 +617,10 @@ def create_chain_with_message_history():
             employee_data = fetch_employee_data(employee_id)
             # print(f"Employee Data for ID {employee_id}: {employee_data}")
             # print()
-            employee_summary = summarize_employee_data(employee_data, employee_id)
+            employee_summary_text = summarize_employee_data(employee_data, employee_id)
+            employee_summary = generate_employee_summary_text(employee_summary_text)
 
-        print(f"Employee summary Data for ID {employee_id}: {employee_summary}")
+        print(f"Employee summary Data for ID {employee_id}: {employee_summary_text}")
         print()
 
         # 2. 질문 문맥화 처리
@@ -720,7 +764,6 @@ async def query(request: QueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 특정 사원의 데이터를 요약하여 LLM에서 활용할 수 있는 간단한 형태로 변환.
 def summarize_employee_data(employee_data, employee_id):
     """
     특정 사원의 데이터를 요약하여 LLM에서 활용할 수 있는 간단한 형태로 변환.
@@ -730,160 +773,298 @@ def summarize_employee_data(employee_data, employee_id):
         employee_id (int): 요약할 사원의 ID.
 
     Returns:
-        str: 요약된 데이터 문자열.
+        dict: 요약된 데이터 사전 형태.
     """
-    employee_name = employee_data.get("employee_name", "알 수 없음")
-    # print(
-    #     f"전달 받은 사원의 데이터 {employee_id} (이름: {employee_name}): {employee_data}"
-    # )
-    # print()
+    employee_name = employee_data.get("employee_name", [{"name": "알 수 없음"}])
+    summary = {
+        "employee_id": employee_id,
+        "employee_name": employee_name[0].get("name", "알 수 없음"),
+        "role_info": employee_data.get("role", [{}])[0],
+        "duty_info": employee_data.get("duty", [{}])[0],
+        "position_info": employee_data.get("position", [{}])[0],
+        "vacation_info": [],
+        "department_info": employee_data.get("department", [{}])[0],
+        "department_members": [],
+        "evaluation_info": [],
+        "task_type_evaluation_info": [],
+        "grades": [],
+        "commute_records": [],
+        "attendance_requests": [],
+    }
 
-    summaries = [f"사원 이름: {employee_name[0]["name"]}"]  # 사원 이름 추가
-
-    # 연차 데이터 요약
+    # 휴가 정보 요약
     vacations = employee_data.get("vacation", [])
-    # print(f"휴가 데이터 (전체): {vacations}")
-    # print()
-    if vacations:  # vacation 데이터가 비어 있지 않은 경우
-        vacation_summary = "\n".join(
-            f"- {vacation.get('vacation_name', '이름 없음')}: 남은 {vacation.get('vacation_left', 0)}일, 사용 {vacation.get('vacation_used', 0)}일"
-            for vacation in vacations
-        )
-        summaries.append(f"휴가 정보:\n{vacation_summary}")
-    else:
-        print("휴가 데이터 상태: 데이터가 비어 있습니다.")
-        summaries.append("휴가 정보: 데이터가 비어 있습니다.")
+    summary["vacation_info"] = [
+        {
+            "name": vacation.get("vacation_name", "이름 없음"),
+            "remaining_days": vacation.get("vacation_left", 0),
+            "used_days": vacation.get("vacation_used", 0),
+        }
+        for vacation in vacations
+    ]
 
-    # 근태 데이터 요약
-    commutes = employee_data.get("commute", [])
-    if commutes:  # commute 데이터가 비어 있지 않은 경우
-        commute_summary = f"- 최근 근태 기록 수: {len(commutes)}개"
-        summaries.append(f"근태 정보:\n{commute_summary}")
-    else:
-        summaries.append("근태 정보: 데이터가 비어 있습니다.")
+    # 부서 구성원 요약
+    department_members = employee_data.get("department_members", [])
+    summary["department_members"] = [
+        {
+            "member_name": member.get("name", "N/A"),
+            "role": member.get("role_name", "N/A"),
+            "email": member.get("email", "N/A"),
+        }
+        for member in department_members
+    ]
 
-    # 평가 데이터 요약
+    # 평가 정보 요약
     evaluations = employee_data.get("evaluation", [])
-    if evaluations:  # evaluation 데이터가 비어 있지 않은 경우
-        evaluation_summary = "\n".join(
-            f"- 등급: {evaluation.get('grade', 'N/A')}, 점수: {evaluation.get('score', 'N/A')}"
-            for evaluation in evaluations
-        )
-        summaries.append(f"평가 정보:\n{evaluation_summary}")
-    else:
-        summaries.append("평가 정보: 데이터가 비어 있습니다.")
+    summary["evaluation_info"] = [
+        {
+            "evaluation_type": evaluation.get("evaluation_type", "N/A"),
+            "final_grade": evaluation.get("fin_grade", "N/A"),
+            "final_score": evaluation.get("fin_score", "N/A"),
+            "year": evaluation.get("year", "N/A"),
+            "half": evaluation.get("half", "N/A"),
+        }
+        for evaluation in evaluations
+    ]
 
-    # 요약이 비어있는 경우 처리
-    if not summaries:
-        return f"사원 ID {employee_id}의 데이터가 존재하지 않습니다."
+    # 평가정책별평가 정보 요약
+    task_type_evaluations = employee_data.get("task_type_evaluation", [])
+    summary["task_type_evaluation_info"] = [
+        {
+            "task_total_score": task_eval.get("task_type_total_score", 0),
+            "policy_id": task_eval.get("evaluation_policy_id", "N/A"),
+            "created_at": task_eval.get("created_at", "N/A"),
+        }
+        for task_eval in task_type_evaluations
+    ]
 
-    return "\n".join(summaries)
+    # 등급 정보 요약
+    grades = employee_data.get("grades", [])
+    summary["grades"] = [
+        {
+            "grade_name": grade.get("grade_name", "N/A"),
+            "start_ratio": grade.get("start_ratio", 0),
+            "end_ratio": grade.get("end_ratio", 0),
+            "absolute_ratio": grade.get("absolute_grade_ratio", 0),
+            "policy_id": grade.get("evaluation_policy_id", "N/A"),
+        }
+        for grade in grades
+    ]
+
+    # 근태 기록 요약
+    commutes = employee_data.get("commute", [])
+    summary["commute_records"] = [
+        {
+            "start_time": commute.get("start_time", "N/A"),
+            "end_time": commute.get("end_time", "N/A"),
+            "remote_status": commute.get("remote_status", "N"),
+            "overtime_status": commute.get("overtime_status", "N"),
+            "attendance_request": (
+                {
+                    "file_name": commute.get("file_name", "N/A"),
+                    "file_url": commute.get("file_url", "N/A"),
+                }
+                if commute.get("attendance_request_id")
+                else None
+            ),
+        }
+        for commute in commutes
+    ]
+
+    # 근태 신청 정보 요약
+    attendance_requests = employee_data.get("attendance_requests", [])
+    summary["attendance_requests"] = [
+        {
+            "start_date": request.get("start_date", "N/A"),
+            "end_date": request.get("end_date", "N/A"),
+            "created_at": request.get("created_at", "N/A"),
+            "reason": request.get("request_reason", "N/A"),
+            "status": request.get("request_status", "WAIT"),
+            "canceled_at": request.get("canceled_at", None),
+            "cancel_reason": request.get("cancel_reason", None),
+        }
+        for request in attendance_requests
+    ]
+
+    return summary
 
 
 def fetch_employee_data(employee_id):
     """
     주어진 employee_id로 사원 관련 데이터를 조회합니다.
-    - NaN 및 Infinity 값을 처리하여 안전하게 반환
+
+    Args:
+        employee_id (int): 조회할 사원의 ID.
+
+    Returns:
+        dict: 사원 관련 데이터.
     """
     try:
-        engine = connect_sqlalchemy()  # 데이터베이스 연결 엔진
+        engine = connect_sqlalchemy()
         with engine.connect() as connection:
-
-            # 각 테이블에서 데이터를 조회
-
-            employee_query = text(
-                "SELECT name FROM employee WHERE employee_id = :employee_id"
-            )
-            vacation_query = text(
-                "SELECT * FROM vacation WHERE employee_id = :employee_id"
-            )
-            evaluation_query = text(
-                "SELECT * FROM evaluation WHERE employee_id = :employee_id"
-            )
-            commute_query = text(
-                "SELECT * FROM commute WHERE employee_id = :employee_id"
-            )
-
-            employee_data = (
-                pd.read_sql(
-                    employee_query, connection, params={"employee_id": employee_id}
-                )
-                .where(
-                    pd.notnull(
-                        pd.read_sql(
-                            employee_query,
-                            connection,
-                            params={"employee_id": employee_id},
+            queries = {
+                "employee": "SELECT name, department_code, position_code, role_code, duty_code FROM employee WHERE employee_id = :employee_id",
+                "vacation": "SELECT vacation_name, vacation_left, vacation_used FROM vacation WHERE employee_id = :employee_id",
+                "evaluation": """
+                    SELECT evaluation_type, fin_grade, fin_score, year, half
+                    FROM evaluation
+                    WHERE employee_id = :employee_id
+                """,
+                "task_type_evaluation": """
+                    SELECT task_type_total_score, evaluation_policy_id, created_at
+                    FROM task_type_eval
+                    WHERE evaluation_id IN (
+                        SELECT evaluation_id
+                        FROM evaluation
+                        WHERE employee_id = :employee_id
+                    )
+                """,
+                "grade": """
+                    SELECT grade_name, start_ratio, end_ratio, absolute_grade_ratio, evaluation_policy_id
+                    FROM grade
+                    WHERE evaluation_policy_id IN (
+                        SELECT evaluation_policy_id
+                        FROM task_type_eval
+                        WHERE evaluation_id IN (
+                            SELECT evaluation_id
+                            FROM evaluation
+                            WHERE employee_id = :employee_id
                         )
-                    ),
-                    None,
-                )  # NaN을 None으로 변환
-                .replace([float("inf"), float("-inf")], None)
-                .to_dict(orient="records")
-            )
-            vacation_data = (
-                pd.read_sql(
-                    vacation_query, connection, params={"employee_id": employee_id}
-                )
-                .where(
-                    pd.notnull(
-                        pd.read_sql(
-                            vacation_query,
-                            connection,
-                            params={"employee_id": employee_id},
-                        )
-                    ),
-                    None,
-                )  # NaN을 None으로 변환
-                .replace([float("inf"), float("-inf")], None)
-                .to_dict(orient="records")
-            )
-            evaluation_data = (
-                pd.read_sql(
-                    evaluation_query, connection, params={"employee_id": employee_id}
-                )
-                .where(
-                    pd.notnull(
-                        pd.read_sql(
-                            evaluation_query,
-                            connection,
-                            params={"employee_id": employee_id},
-                        )
-                    ),
-                    None,
-                )  # NaN을 None으로 변환
-                .replace([float("inf"), float("-inf")], None)
-                .to_dict(orient="records")
-            )
-            commute_data = (
-                pd.read_sql(
-                    commute_query, connection, params={"employee_id": employee_id}
-                )
-                .where(
-                    pd.notnull(
-                        pd.read_sql(
-                            commute_query,
-                            connection,
-                            params={"employee_id": employee_id},
-                        )
-                    ),
-                    None,
-                )  # NaN을 None으로 변환
-                .replace([float("inf"), float("-inf")], None)
-                .to_dict(orient="records")
-            )
+                    )
+                """,
+                "commute": """
+                    SELECT c.start_time, c.end_time, c.remote_status, c.overtime_status,
+                           c.attendance_request_id, ar.file_name, ar.file_url
+                    FROM commute c
+                    LEFT JOIN attendance_request_file ar
+                    ON c.attendance_request_id = ar.attendance_request_id
+                    WHERE c.employee_id = :employee_id
+                """,
+                "department": """
+                    SELECT department_name FROM department WHERE department_code = (SELECT department_code FROM employee WHERE employee_id = :employee_id)
+                """,
+                "role": """
+                    SELECT role_name FROM role WHERE role_code = (SELECT role_code FROM employee WHERE employee_id = :employee_id)
+                """,
+                "duty": """
+                    SELECT duty_name FROM duty WHERE duty_code = (SELECT duty_code FROM employee WHERE employee_id = :employee_id)
+                """,
+                "position": """
+                    SELECT position_name FROM position WHERE position_code = (SELECT position_code FROM employee WHERE employee_id = :employee_id)
+                """,
+                "department_members": """
+                    SELECT name, role_name, email FROM department_member WHERE department_code = (SELECT department_code FROM employee WHERE employee_id = :employee_id)
+                """,
+                "attendance_requests": """
+                    SELECT start_date, end_date, created_at, request_reason, request_status, canceled_at, cancel_reason
+                    FROM attendance_request
+                    WHERE employee_id = :employee_id
+                """,
+            }
 
-        # 모든 데이터 직렬화
-        return {
-            "employee_name": serialize_data(employee_data),  # 사원 이름 추가
-            "vacation": serialize_data(vacation_data),
-            "evaluation": serialize_data(evaluation_data),
-            "commute": serialize_data(commute_data),
-        }
+            # 데이터 가져오기
+            data = {
+                key: pd.read_sql(
+                    text(query), connection, params={"employee_id": employee_id}
+                ).to_dict(orient="records")
+                for key, query in queries.items()
+            }
+
+        return data
 
     except Exception as e:
         print(f"Error fetching employee data: {e}")
         return {}
+
+
+def generate_employee_summary_text(summary):
+    """
+    요약 데이터를 기반으로 각 데이터 유형별 문장을 생성.
+
+    Args:
+        summary (dict): 요약된 사원 데이터.
+
+    Returns:
+        str: 문장으로 구성된 요약 데이터.
+    """
+    employee_id = summary.get("employee_id", "알 수 없음")
+    employee_name = summary.get("employee_name", "알 수 없음")
+    role_info = summary.get("role_info", {}).get("role_name", "알 수 없음")
+    duty_info = summary.get("duty_info", {}).get("duty_name", "알 수 없음")
+    position_info = summary.get("position_info", {}).get("position_name", "알 수 없음")
+    department_name = summary.get("department_info", {}).get(
+        "department_name", "알 수 없음"
+    )
+
+    # 사원 기본 정보
+    result = [
+        f"사원 ID: {employee_id}",
+        f"사원 이름: {employee_name}",
+        f"직위: {position_info}",
+        f"직무: {duty_info}",
+        f"역할: {role_info}",
+        f"소속 부서: {department_name}",
+    ]
+
+    # 휴가 정보
+    vacations = summary.get("vacation_info", [])
+    if vacations:
+        vacation_texts = [
+            f"- {vacation['name']}: 남은 {vacation['remaining_days']}일, 사용 {vacation['used_days']}일"
+            for vacation in vacations
+        ]
+        result.append(f"휴가 정보:\n" + "\n".join(vacation_texts))
+    else:
+        result.append("휴가 정보: 데이터가 없습니다.")
+
+    # 부서 구성원
+    department_members = summary.get("department_members", [])
+    if department_members:
+        member_texts = [
+            f"- 이름: {member['member_name']}, 역할: {member['role']}, 이메일: {member['email']}"
+            for member in department_members
+        ]
+        result.append(f"부서 구성원:\n" + "\n".join(member_texts))
+    else:
+        result.append("부서 구성원 정보: 데이터가 없습니다.")
+
+    # 평가 정보
+    evaluations = summary.get("evaluation_info", [])
+    if evaluations:
+        evaluation_texts = [
+            f"- {evaluation['evaluation_type']} (년도: {evaluation['year']}, 반기: {evaluation['half']}): "
+            f"등급: {evaluation['final_grade']}, 점수: {evaluation['final_score']}"
+            for evaluation in evaluations
+        ]
+        result.append(f"평가 정보:\n" + "\n".join(evaluation_texts))
+    else:
+        result.append("평가 정보: 데이터가 없습니다.")
+
+    # 근태 기록
+    commute_records = summary.get("commute_records", [])
+    if commute_records:
+        commute_texts = [
+            f"- 출근 시간: {commute['start_time']}, 퇴근 시간: {commute['end_time']}, "
+            f"재택 근무: {'예' if commute['remote_status'] == 'Y' else '아니오'}, "
+            f"초과 근무: {'예' if commute['overtime_status'] == 'Y' else '아니오'}"
+            for commute in commute_records
+        ]
+        result.append(f"근태 기록:\n" + "\n".join(commute_texts))
+    else:
+        result.append("근태 기록: 데이터가 없습니다.")
+
+    # 근태 신청
+    attendance_requests = summary.get("attendance_requests", [])
+    if attendance_requests:
+        attendance_texts = [
+            f"- 신청일: {request['start_date']} ~ {request['end_date']}, 사유: {request['reason']}, 상태: {request['status']}"
+            for request in attendance_requests
+        ]
+        result.append(f"근태 신청:\n" + "\n".join(attendance_texts))
+    else:
+        result.append("근태 신청: 데이터가 없습니다.")
+
+    return "\n".join(result)
 
 
 if __name__ == "__main__":

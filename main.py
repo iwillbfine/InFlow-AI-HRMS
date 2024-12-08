@@ -52,6 +52,7 @@ from concurrent.futures import ThreadPoolExecutor  # 병렬 처리를 위한 모
 from datetime import datetime  # 배치 주기를 위한 모듈
 import shutil  # 디렉토리 삭제를 위한 모듈
 import asyncio  # 시간 대기를 위한 모듈
+import re  # 단어 검색시 정규표현식 사용
 
 import traceback  # 에러 디버깅 및 트레이스백 추적
 import uvicorn  # FastAPI 서버 실행
@@ -286,83 +287,12 @@ def get_or_create_history(session_id):
     return chat_history_storage[session_id]
 
 
-table_name_mapping = {
-    "monthly_employee_num_statistics": "월별 사원 수 통계 테이블 (사원의 월별 변화 추이를 포함)",
-    "monthly_department_overtime_allowance_statistics": "월별 부서별 초과근무 수당 통계 테이블",
-    "semiannual_department_performance_ratio_statistics": "반기별 부서 성과 비율 통계 테이블",
-    "feedback": "피드백 테이블 (사원 및 부서에 대한 피드백 정보를 포함)",
-    "task_eval": "과제 평가 테이블 (개별 과제에 대한 평가 기록 포함)",
-    "task_type_eval": "과제 유형 평가 테이블 (각 유형별 평가 정보 포함)",
-    "grade": "등급 테이블 (사원의 평가 등급 정보를 포함)",
-    "evaluation": "평가 테이블 (사원의 성과 및 능력 평가 기록 포함)",
-    "task_item": "과제 항목 테이블 (세부 과제 항목 정보 포함)",
-    "evaluation_policy": "평가 정책 테이블 (평가 기준 및 정책 정보 포함)",
-    "task_type": "과제 유형 테이블 (과제의 분류 및 유형 정보 포함)",
-    "business_trip": "출장 테이블 (사원의 출장 기록 및 세부 정보 포함)",
-    "leave_return": "복직 테이블 (휴직 후 복직 정보 포함)",
-    "commute": "출퇴근 테이블 (사원의 출퇴근 시간 및 기록 포함)",
-    "attendance_request_file": "근태 요청 파일 테이블 (근태 요청에 첨부된 파일 정보 포함)",
-    "attendance_request": "근태 요청 테이블 (사원의 근태 변경 요청 기록 포함)",
-    "attendance_request_type": "근태 요청 유형 테이블 (근태 요청의 분류 및 유형 정보 포함)",
-    "payment": "지급 테이블 (사원의 급여 및 보너스 지급 내역 포함)",
-    "irregular_allowance": "비정기 수당 테이블 (특별 수당 및 비정기 수당 정보 포함)",
-    "public_holiday": "공휴일 테이블 (회사에서 인정하는 공휴일 정보 포함)",
-    "tax_credit": "세액 공제 테이블 (사원의 세액 공제 정보 포함)",
-    "non_taxable": "비과세 항목 테이블 (비과세 수당 및 기타 항목 정보 포함)",
-    "major_insurance": "주요 보험 테이블 (4대 보험 관련 정보 포함)",
-    "earned_income_tax": "근로 소득세 테이블 (사원의 소득세 계산 정보 포함)",
-    "annual_vacation_promotion_policy": "연차 촉진 정책 테이블 (연차 사용 및 촉진 정책 정보 포함)",
-    "vacation_request_file": "휴가 요청 파일 테이블 (휴가 요청에 첨부된 파일 정보 포함)",
-    "vacation_request": "휴가 요청 테이블 (사원의 휴가 신청 기록 포함)",
-    "vacation": "휴가 테이블 (휴가 사용 기록 및 상태 정보 포함)",
-    "vacation_policy": "휴가 정책 테이블 (연차 및 유급/무급 휴가 정책 관련 정보 포함)",
-    "vacation_type": "휴가 유형 테이블 (연차, 병가 등 휴가 유형 정보 포함)",
-    "department_member": "부서 구성원 테이블 (부서별 소속 사원 정보 포함)",
-    "appointment": "인사 발령 테이블 (사원의 인사 발령 기록 포함)",
-    "appointment_item": "인사 발령 항목 테이블 (세부 인사 발령 항목 정보 포함)",
-    "discipline_reward": "징계 및 포상 테이블 (사원의 징계 및 포상 기록 포함)",
-    "language_test": "어학 시험 테이블 (사원의 어학 시험 기록 및 점수 포함)",
-    "language": "언어정보 테이블 (지원 가능한 언어 정보 포함)",
-    "qualification": "자격증 테이블 (사원의 자격증 정보 포함)",
-    "contract": "계약 테이블 (사원의 계약 정보 및 내용 포함)",
-    "career": "경력 테이블 (사원의 이전 경력 및 기록 포함)",
-    "education": "학력 테이블 (사원의 학력 정보 포함)",
-    "family_member": "가족 구성원 테이블 (사원의 부양 가족 정보 포함)",
-    "family_relationship": "가족 관계 테이블 (가족 구성원의 관계 정보 포함)",
-    "employee": "사원 정보 테이블 (사원의 개인 정보와 직책 정보를 포함)",
-    "duty": "직무 테이블 (사원의 직무 및 역할 정보 포함)",
-    "role": "역할 테이블 (사원의 역할 및 권한 정보 포함)",
-    "position": "직위 테이블 (사원의 직위 정보 포함)",
-    "attendance_status_type": "근태 상태 유형 테이블 (출근, 조퇴 등 근태 상태 정보 포함)",
-    "department": "부서 테이블 (부서의 이름 및 코드 정보 포함)",
-    "company": "회사 테이블 (회사 정보 및 조직 구조 포함)",
-}
-
-
-#  테이블명을 한국어 설명으로 매핑
-def map_table_name_to_korean(table_name):
-    return table_name_mapping.get(table_name, f"알 수 없는 테이블: {table_name}")
-
-
-# 문서에 한국어 테이블명 주석 추가
-def annotate_with_table_names(documents):
-
-    for doc in documents:
-        table_name = doc.metadata.get("table")
-        if table_name:
-            doc.metadata["table_korean"] = map_table_name_to_korean(table_name)
-    return documents
-
-
 # 체인 생성 함수
 def create_chain_with_message_history():
     global rag_chain  # 전역 변수를 사용하도록 선언
 
-    # retriever = vectorstore.as_retriever(
-    #     search_type="cosine", search_kwargs={"fetch_k": 5, "k": 3}
-    # )
     retriever = vectorstore.as_retriever(
-        search_type="mmr", search_kwargs={"lambda_mult": 0.9, "fetch_k": 10, "k": 3}
+        search_type="mmr", search_kwargs={"lambda_mult": 0.95, "fetch_k": 4, "k": 3}
     )
 
     # 질문 문맥화 프롬프트
@@ -390,6 +320,9 @@ def create_chain_with_message_history():
     Reformulate the given sentence or phrase to make it resemble a clear and standalone question as closely as possible."
 
     """
+    # 예상 질문안에 근퇴 or 출퇴근/ 재택 / 초과 근무 / 휴가 / 휴직 / 복직 / 출장 / 파견 / 급여 / 계약 or 증명 / 부서 / 평가
+    #
+    #
 
     contextualize_q_prompt = ChatPromptTemplate.from_messages(
         [
@@ -447,7 +380,7 @@ def create_chain_with_message_history():
     llm = ChatOpenAI(
         api_key=OPENAI_API_KEY,
         model="gpt-4o-mini",
-        temperature=0.2,
+        temperature=0.1,
     )
 
     contextualize_chain = RunnableWithMessageHistory(
@@ -497,8 +430,6 @@ def create_chain_with_message_history():
             {"input": user_query, "history": history_as_list},
             {"configurable": {"session_id": session_id}},
         )
-        print(f"Contextualized Question: {contextualized_result}")
-        print()
 
         # 문맥화된 질문이 비어 있을 경우 처리
         if not contextualized_result.content.strip():
@@ -519,10 +450,7 @@ def create_chain_with_message_history():
         print()
 
         # 4. RAG 결과와 사원 데이터 결합
-        combined_context = (
-            annotate_with_table_names(retrieval_result.get("context", []))
-            + history_as_list
-        )
+        combined_context = retrieval_result.get("context", []) + history_as_list
 
         # 사원 요약 정보를 combined_context에 추가
         if employee_summary_document:
@@ -585,6 +513,8 @@ async def query(request: QueryRequest):
         contextualized_question = response.get("contextualized_question", "").replace(
             "\\", ""
         )
+        print("contextualized_question: ", contextualized_question)
+        print()
 
         answer = response.get(
             "retrieval_response", "답변을 생성하지 못했습니다."
@@ -602,10 +532,45 @@ async def query(request: QueryRequest):
             for message in chat_history.messages
         ]
 
+        # 한국어 키워드와 매칭되는 딕셔너리
+        keyword_dict = {
+            "근퇴": "commute",
+            "출퇴근": "commute",
+            "재택": "remote",
+            "초과 근무": "overtime",
+            "초과근무": "overtime",
+            "휴가": "vacation",
+            "휴직": "leave",
+            "복직": "leave",
+            "출장": "business",
+            "파견": "dispatch",
+            "급여": "salary",
+            "계약": "contract",
+            "증명": "contract",
+            "부서": "department",
+            "평가": "evaluation",
+        }
+
+        # 정규표현식을 통해 키워드 검색
+        if hasattr(contextualized_question, "content"):  # AIMessage인 경우 content 추출
+            contextualized_result_text = contextualized_question.content
+        else:  # 기본적으로 문자열로 처리
+            contextualized_result_text = str(contextualized_question)
+
+        pattern = re.compile("|".join(map(re.escape, keyword_dict.keys())))
+        match = pattern.search(contextualized_result_text)
+
+        # 매칭된 키워드로 값만 설정
+        selected_keyword = keyword_dict[match.group()] if match else "Nothing"
+
+        # 결과 출력
+        print(f"선택된 딕셔너리: {selected_keyword}")
+
         # 응답 데이터 통합
         response_content = {
             "contextualized_question": contextualized_question,
             "answer": answer,
+            "selected_keyword": selected_keyword,
             "source_documents": serialized_documents,
             "history": serialized_history,
         }

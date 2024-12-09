@@ -53,6 +53,7 @@ from datetime import datetime  # 배치 주기를 위한 모듈
 import shutil  # 디렉토리 삭제를 위한 모듈
 import asyncio  # 시간 대기를 위한 모듈
 import re  # 단어 검색시 정규표현식 사용
+from fasteners import InterProcessLock
 
 import traceback  # 에러 디버깅 및 트레이스백 추적
 import uvicorn  # FastAPI 서버 실행
@@ -67,10 +68,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 # .env 파일 로드
 load_dotenv()
 
+# # 데이터 경로 설정
+# DATA_DIR = r"C:\lecture\FinalProject\InFlow-AI\data"
+# CHROMA_DB_DIR = f"C:/lecture/FinalProject/InFlow-AI/chromadb_worker_{os.getpid()}"
+# CSV_DIR = r"C:\lecture\FinalProject\InFlow-AI\chromadb\csv_files"
+
+
 # 데이터 경로 설정
 DATA_DIR = r"C:\lecture\FinalProject\InFlow-AI\data"
-CHROMA_DB_DIR = r"C:\lecture\FinalProject\InFlow-AI\chromadb"
+CHROMA_DB_DIR = f"C:/lecture/FinalProject/InFlow-AI/chromadb_worker_{os.getpid()}"
 CSV_DIR = r"C:\lecture\FinalProject\InFlow-AI\chromadb\csv_files"
+LOCK_FILE = r"C:/lecture/FinalProject/InFlow-AI/chroma.lock"  # 잠금 파일 경로
 
 # MariaDB 연결 정보
 DB_HOST = os.getenv("DB_HOST", "localhost")
@@ -95,13 +103,39 @@ vectorstore = None
 
 
 # CSV 디렉토리와 Chroma DB 디렉토리를 초기화 및 생성
+# def initialize_directories():
+#     lock = InterProcessLock(LOCK_FILE)
+#     if lock.acquire(blocking=False):  # 잠금 획득 시만 초기화 수행
+#         try:
+#             if os.path.exists(CHROMA_DB_DIR):
+#                 shutil.rmtree(CHROMA_DB_DIR)
+#                 print(f"Cleared Chroma DB directory: {CHROMA_DB_DIR}")
+#             os.makedirs(CHROMA_DB_DIR, exist_ok=True)
+#             print(f"Created Chroma DB directory: {CHROMA_DB_DIR}")
+#         finally:
+#             lock.release()
+#     else:
+#         print("Another process is already initializing directories. Skipping...")
+
+
 def initialize_directories():
-    # Chroma DB 디렉토리 초기화
-    if os.path.exists(CHROMA_DB_DIR):
-        shutil.rmtree(CHROMA_DB_DIR)  # 기존 Chroma DB 디렉토리 삭제
-        print(f"Cleared Chroma DB directory: {CHROMA_DB_DIR}")
-    os.makedirs(CHROMA_DB_DIR, exist_ok=True)  # Chroma DB 디렉토리 재생성
-    print(f"Created Chroma DB directory: {CHROMA_DB_DIR}")
+    os.makedirs(os.path.dirname(LOCK_FILE), exist_ok=True)  # 잠금 파일의 디렉토리 생성
+    lock = InterProcessLock(LOCK_FILE)  # 잠금 파일을 통한 동시성 제어
+
+    try:
+        if lock.acquire(blocking=True, timeout=10):  # 잠금 획득 대기 (최대 10초)
+            try:
+                if os.path.exists(CHROMA_DB_DIR):
+                    print(f"Chroma DB directory already exists: {CHROMA_DB_DIR}")
+                else:
+                    os.makedirs(CHROMA_DB_DIR, exist_ok=True)
+                    print(f"Created Chroma DB directory: {CHROMA_DB_DIR}")
+            finally:
+                lock.release()
+        else:
+            print("Failed to acquire lock. Another process is initializing.")
+    except Exception as e:
+        print(f"Error during directory initialization: {e}")
 
 
 # SQLAlchemy 엔진 생성(mariadb )
@@ -852,5 +886,11 @@ def generate_employee_summary_text(summary):
     return "\n".join(result)
 
 
+# if __name__ == "__main__":
+#     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    if os.environ.get("IS_MAIN_PROCESS", "1") == "1":  # 메인 프로세스만 실행
+        initialize_directories()
+    uvicorn.run(app, host="0.0.0.0", port=8000, workers=10)

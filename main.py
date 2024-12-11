@@ -75,10 +75,16 @@ load_dotenv()
 
 
 # 데이터 경로 설정
-DATA_DIR = r"C:\lecture\FinalProject\InFlow-AI\data"
-CHROMA_DB_DIR = f"C:/lecture/FinalProject/InFlow-AI/chromadb_worker_{os.getpid()}"
-CSV_DIR = r"C:\lecture\FinalProject\InFlow-AI\chromadb\csv_files"
-LOCK_FILE = r"C:/lecture/FinalProject/InFlow-AI/chroma.lock"  # 잠금 파일 경로
+# DATA_DIR = r"C:\lecture\FinalProject\InFlow-AI\data"
+# CHROMA_DB_DIR = f"C:/lecture/FinalProject/InFlow-AI/chromadb_worker_{os.getpid()}"
+# CSV_DIR = r"C:\lecture\FinalProject\InFlow-AI\chromadb\csv_files"
+# LOCK_FILE = r"C:/lecture/FinalProject/InFlow-AI/chroma.lock"  # 잠금 파일 경로
+
+# ec2 데이터 경로
+DATA_DIR = r"/home/ec2-user/InFlow-AI/data"
+CHROMA_DB_DIR = f"/home/ec2-user/InFlow-AI/chromadb_worker_{os.getpid()}"
+CSV_DIR = r"/home/ec2-user/InFlow-AI/chromadb/csv_files"
+LOCK_FILE = r"/home/ec2-user/InFlow-AI/chroma.lock"  # 잠금 파일 경로
 
 # MariaDB 연결 정보
 DB_HOST = os.getenv("DB_HOST", "localhost")

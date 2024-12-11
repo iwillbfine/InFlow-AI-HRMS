@@ -351,7 +351,7 @@ def create_chain_with_message_history():
     질문은 반드시 한국어 존댓말로 해줘.
     **Do NOT answer the question. Only generate or reformulate the question.**
 
-   Rewrite the provided sentence or phrase to form a clear and standalone question while keeping it as similar as possible to the original user query."
+    Reformulate the given sentence or phrase to make it resemble a clear and standalone question as closely as possible."
 
     """
     # 예상 질문안에 근퇴 or 출퇴근/ 재택 / 초과 근무 / 휴가 / 휴직 / 복직 / 출장 / 파견 / 급여 / 계약 or 증명 / 부서 / 평가
@@ -379,7 +379,7 @@ def create_chain_with_message_history():
     utilize the provided employee summary information in the answer.
     3. If the question involves HR system functionalities or policies, include \
     relevant HR table metadata (e.g., table names, descriptions) in the explanation.
-    4. If the question is not clear regarding HR-related matters:
+    4. If no clear answer can be provided:
     - Guess the user’s intent based on the context and give a relevant suggestion.
     - If no reasonable inference can be made, respond politely:
         "질문에 대해 정확한 답변을 드리기 어려워요. 조금 더 구체적으로 질문해 주시면 감사하겠습니다." 

@@ -462,9 +462,6 @@ def create_chain_with_message_history():
                 metadata={"source": "employee_summary"},
             )
 
-        print(f"Employee summary Data for ID {employee_id}: {employee_summary}")
-        print()
-
         # 2. 질문 문맥화 처리
         contextualized_result = contextualize_chain.invoke(
             {"input": user_query, "history": history_as_list},
@@ -542,6 +539,25 @@ async def query(request: QueryRequest):
         user_input = request.query
         session_id = request.session_id
         employee_id = request.employee_id  # employee_id 추가
+
+        # "우리 프로그램 어때?"에 대한 특별한 응답 처리
+        if user_input.strip() == "우리 프로그램 어때?":
+            specific_answer = """ 이 프로그램은 인사, 근태, 휴가, 급여, 평가, 계약서 관리 등 인사관리의 핵심 기능을 모두 구현하며, 다양한 산업군에 적용 가능한 B2B 중심 솔루션을 개발했습니다.\n 24시간 AI 챗봇을 통해 단순 문의를 신속히 처리하고, 전자 계약서 관리와 업무 자동화를 통해 작업 효율성을 대폭 향상시켰습니다.\n저희는 이 프로그램을 단순한 도구가 아닌, 모든 회사의 더 나은 내일을 위한 든든한 동반자로 만들고 싶었습니다. \n작은 문제를 해결하며 쌓아온 시간들, 밤낮없이 고민한 노력들이 오늘 이 자리를 통해 여러분께 닿길 바랍니다. \n**끝으로, 긴 발표를 들어주신 심사위원님과 청취자 여러분께 진심으로 감사드립니다. \n저희의 열정과 노력에 따뜻한 관심과 응원을 부탁드립니다. 감사합니다!**"""
+
+            # JSON 응답 데이터 생성
+            response_content = {
+                "contextualized_question": user_input,
+                "answer": specific_answer,
+                "selected_keyword": "Nothing",
+                "source_documents": [],
+                "history": [],
+            }
+            serialized_response = serialize_data(response_content)
+
+            end_time = time.time()
+            execution_time = end_time - start_time
+            logging.info(f"실행 시간: {execution_time:.2f} seconds.")
+            return JSONResponse(content=serialized_response)
 
         # 체인 생성 및 실행
         chain = create_chain_with_message_history()
@@ -701,8 +717,6 @@ def summarize_employee_data(employee_data, employee_id):
         }
         for policy in evaluation_policies
     ]
-    print("summary는 ", summary)
-    print()
     return summary
 
 
@@ -808,8 +822,6 @@ def fetch_employee_data(employee_id):
                 ).to_dict(orient="records")
                 for key, query in queries.items()
             }
-        print("평가 추가 data:", data)
-        print()
 
         return data
 
@@ -909,7 +921,6 @@ def generate_employee_summary_text(summary):
         result.append(f"\n평가 정책:\n" + "\n".join(policy_texts))
     else:
         result.append("\n평가 정책: 데이터가 없습니다.")
-    print("평가 정책 추가: ", result)
 
     # 근태 신청
     attendance_requests = summary.get("attendance_requests", [])

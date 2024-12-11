@@ -886,11 +886,5 @@ def generate_employee_summary_text(summary):
     return "\n".join(result)
 
 
-# if __name__ == "__main__":
-#     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
 if __name__ == "__main__":
-    if os.environ.get("IS_MAIN_PROCESS", "1") == "1":  # 메인 프로세스만 실행
-        initialize_directories()
-    uvicorn.run(app, host="0.0.0.0", port=8000, workers=10)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

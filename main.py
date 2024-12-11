@@ -670,6 +670,7 @@ def summarize_employee_data(employee_data, employee_id):
         "commute_records": employee_data.get("commute", []),
         "attendance_requests": [],
         "company_info": employee_data.get("company", [{}])[0],
+        "evaluation_policies": [],
     }
 
     # 휴가 정보 요약
@@ -683,6 +684,19 @@ def summarize_employee_data(employee_data, employee_id):
         for vacation in vacations
     ]
 
+    # 평가 정책 정보 요약
+    evaluation_policies = employee_data.get("evaluation_policy", [])
+    summary["evaluation_policies"] = [
+        {
+            "year": policy.get("year", "N/A"),
+            "half": policy.get("half", "N/A"),
+            "start_date": policy.get("start_date", "N/A"),
+            "end_date": policy.get("end_date", "N/A"),
+        }
+        for policy in evaluation_policies
+    ]
+    print("summary는 ", summary)
+    print()
     return summary
 
 
@@ -706,6 +720,11 @@ def fetch_employee_data(employee_id):
                     FROM vacation
                     WHERE employee_id = :employee_id
                     AND vacation_left < 100
+                """,
+                "evaluation_policy": """
+                    SELECT year, half, start_date, end_date
+                    FROM evaluation_policy
+                    ORDER BY year DESC, half DESC
                 """,
                 "evaluation": """
                     SELECT evaluation_type, fin_grade, fin_score, year, half
@@ -783,6 +802,8 @@ def fetch_employee_data(employee_id):
                 ).to_dict(orient="records")
                 for key, query in queries.items()
             }
+        print("평가 추가 data:", data)
+        print()
 
         return data
 
@@ -871,6 +892,18 @@ def generate_employee_summary_text(summary):
         result.append(f"\n평가 정보:\n" + "\n".join(evaluation_texts))
     else:
         result.append("\n평가 정보: 데이터가 없습니다.")
+
+    # 평가 정책 정보 추가
+    evaluation_policies = summary.get("evaluation_policies", [])
+    if evaluation_policies:
+        policy_texts = [
+            f"- 연도: {policy['year']}, 반기: {policy['half']}, 시작일: {policy['start_date']}, 종료일: {policy['end_date']}"
+            for policy in evaluation_policies
+        ]
+        result.append(f"\n평가 정책:\n" + "\n".join(policy_texts))
+    else:
+        result.append("\n평가 정책: 데이터가 없습니다.")
+    print("평가 정책 추가: ", result)
 
     # 근태 신청
     attendance_requests = summary.get("attendance_requests", [])

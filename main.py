@@ -109,13 +109,14 @@ if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY not found in .env file.")
 
 # OpenAI 임베딩 설정
-# embeddings = OpenAIEmbeddings(
-#     openai_api_key=OPENAI_API_KEY, model="text-embedding-ada-002"
-# )
-# claude 임베딩 모델
-embeddings = VoyageAIEmbeddings(
-    voyage_api_key=VOAGE_API_KEY, model="voyage-lite-02-instruct"
+embeddings = OpenAIEmbeddings(
+    openai_api_key=OPENAI_API_KEY, model="text-embedding-ada-002"
 )
+
+# # claude 임베딩 모델
+# embeddings = VoyageAIEmbeddings(
+#     voyage_api_key=VOAGE_API_KEY, model="voyage-lite-02-instruct"
+# )
 
 
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
@@ -432,16 +433,16 @@ def create_chain_with_message_history():
     )
 
     # # LLM 설정
-    # llm = ChatOpenAI(
-    #     api_key=OPENAI_API_KEY,
-    #     model="gpt-4o-mini",
-    #     temperature=0.1,
-    # )
+    llm = ChatOpenAI(
+        api_key=OPENAI_API_KEY,
+        model="gpt-4o-mini",
+        temperature=0.1,
+    )
 
     # LLM 설정
-    llm = ChatAnthropic(
-        api_key=CLAUDE_API_KEY, model="claude-3-haiku-20240307", temperature=0.1
-    )
+    # llm = ChatAnthropic(
+    #     api_key=CLAUDE_API_KEY, model="claude-3-haiku-20240307", temperature=0.1
+    # )
 
     contextualize_chain = RunnableWithMessageHistory(
         runnable=contextualize_q_prompt | llm,

@@ -58,9 +58,16 @@ from fasteners import InterProcessLock
 import traceback  # 에러 디버깅 및 트레이스백 추적
 import uvicorn  # FastAPI 서버 실행
 
+
 # 로깅 설정
 import time
 import logging
+
+# claude 임베딩
+from langchain_voyageai import VoyageAIEmbeddings
+
+# claude LLM
+from langchain_anthropic import ChatAnthropic
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
@@ -80,7 +87,7 @@ load_dotenv()
 # CSV_DIR = r"C:\lecture\FinalProject\InFlow-AI\chromadb\csv_files"
 # LOCK_FILE = r"C:/lecture/FinalProject/InFlow-AI/chroma.lock"  # 잠금 파일 경로
 
-# ec2 데이터 경로
+# # ec2 데이터 경로
 DATA_DIR = r"/home/ec2-user/InFlow-AI/data"
 CHROMA_DB_DIR = f"/home/ec2-user/InFlow-AI/chromadb_worker_{os.getpid()}"
 CSV_DIR = r"/home/ec2-user/InFlow-AI/chromadb/csv_files"
@@ -95,13 +102,22 @@ DB_NAME = os.getenv("DB_NAME", "test_db")
 
 # OpenAI API 키 로드
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+VOAGE_API_KEY = os.getenv("VOAGE_API_KEY")
+CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
+
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY not found in .env file.")
 
 # OpenAI 임베딩 설정
-embeddings = OpenAIEmbeddings(
-    openai_api_key=OPENAI_API_KEY, model="text-embedding-ada-002"
+# embeddings = OpenAIEmbeddings(
+#     openai_api_key=OPENAI_API_KEY, model="text-embedding-ada-002"
+# )
+# claude 임베딩 모델
+embeddings = VoyageAIEmbeddings(
+    voyage_api_key=VOAGE_API_KEY, model="voyage-lite-02-instruct"
 )
+
+
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 
 # 벡터 스토어 초기화
@@ -358,7 +374,6 @@ def create_chain_with_message_history():
     **Do NOT answer the question. Only generate or reformulate the question.**
 
     Reformulate the given sentence or phrase to make it resemble a clear and standalone question as closely as possible."
-
     """
     # 예상 질문안에 근퇴 or 출퇴근/ 재택 / 초과 근무 / 휴가 / 휴직 / 복직 / 출장 / 파견 / 급여 / 계약 or 증명 / 부서 / 평가
     #
@@ -416,11 +431,16 @@ def create_chain_with_message_history():
         ]
     )
 
+    # # LLM 설정
+    # llm = ChatOpenAI(
+    #     api_key=OPENAI_API_KEY,
+    #     model="gpt-4o-mini",
+    #     temperature=0.1,
+    # )
+
     # LLM 설정
-    llm = ChatOpenAI(
-        api_key=OPENAI_API_KEY,
-        model="gpt-4o-mini",
-        temperature=0.1,
+    llm = ChatAnthropic(
+        api_key=CLAUDE_API_KEY, model="claude-3-haiku-20240307", temperature=0.1
     )
 
     contextualize_chain = RunnableWithMessageHistory(

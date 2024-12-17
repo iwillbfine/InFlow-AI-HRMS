@@ -1,4 +1,4 @@
-import os  # 운영체제와 관련된 경로 및 환경 변수 작업을 위한 라이브러리
+import os  # 운영체제와 관련된 경로 및 환경 변수(.env 파일) 작업을 위한 라이브러리
 from dotenv import load_dotenv  # .env 파일에서 환경 변수를 로드하기 위한 라이브러리
 from fastapi import FastAPI, HTTPException  # FastAPI 서버 및 HTTP 예외 처리
 from fastapi.responses import JSONResponse  # JSON 응답을 반환하기 위한 클래스
@@ -48,9 +48,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.sql import text  # SQLAlchemy의 text 모듈 추가
 import pandas as pd
 from langchain.schema import Document
-from concurrent.futures import ThreadPoolExecutor  # 병렬 처리를 위한 모듈
 from datetime import datetime  # 배치 주기를 위한 모듈
-import shutil  # 디렉토리 삭제를 위한 모듈
 import asyncio  # 시간 대기를 위한 모듈
 import re  # 단어 검색시 정규표현식 사용
 from fasteners import InterProcessLock
@@ -72,38 +70,30 @@ from langchain_anthropic import ChatAnthropic
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 
-# .env 파일 로드
+# .env 파일 로드(깃이그노어 설정됨)
 load_dotenv()
 
-# # 데이터 경로 설정
-# DATA_DIR = r"C:\lecture\FinalProject\InFlow-AI\data"
-# CHROMA_DB_DIR = f"C:/lecture/FinalProject/InFlow-AI/chromadb_worker_{os.getpid()}"
-# CSV_DIR = r"C:\lecture\FinalProject\InFlow-AI\chromadb\csv_files"
+# 로컬 디스크에 저장할 디렉토리 경로 설정
+DATA_DIR = r"C:\lecture\FinalProject\InFlow-AI\data"
+CHROMA_DB_DIR = f"C:/lecture/FinalProject/InFlow-AI/chromadb"  # 실행중인
+CSV_DIR = r"C:\lecture\FinalProject\InFlow-AI\chromadb\csv_files"
 
+# ec2의 EBS에 저장할 디렉토리 경로
+# DATA_DIR = r"/home/ec2-user/InFlow-AI/data"
+# CHROMA_DB_DIR = f"/home/ec2-user/InFlow-AI/chromadb"
+# CSV_DIR = r"/home/ec2-user/InFlow-AI/chromadb/csv_files"
 
-# 데이터 경로 설정
-# DATA_DIR = r"C:\lecture\FinalProject\InFlow-AI\data"
-# CHROMA_DB_DIR = f"C:/lecture/FinalProject/InFlow-AI/chromadb_worker_{os.getpid()}"
-# CSV_DIR = r"C:\lecture\FinalProject\InFlow-AI\chromadb\csv_files"
-# LOCK_FILE = r"C:/lecture/FinalProject/InFlow-AI/chroma.lock"  # 잠금 파일 경로
-
-# # ec2 데이터 경로
-DATA_DIR = r"/home/ec2-user/InFlow-AI/data"
-CHROMA_DB_DIR = f"/home/ec2-user/InFlow-AI/chromadb_worker_{os.getpid()}"
-CSV_DIR = r"/home/ec2-user/InFlow-AI/chromadb/csv_files"
-LOCK_FILE = r"/home/ec2-user/InFlow-AI/chroma.lock"  # 잠금 파일 경로
-
-# MariaDB 연결 정보
+# MariaDB 연결 정보(RDS 또는 로컬)
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = int(os.getenv("DB_PORT", 3306))
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-DB_NAME = os.getenv("DB_NAME", "test_db")
+DB_USER = os.getenv("DB_USER", "inflow")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "inflow")
+DB_NAME = os.getenv("DB_NAME", "inflowdb")
 
 # OpenAI API 키 로드
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-VOAGE_API_KEY = os.getenv("VOAGE_API_KEY")
-CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
+VOAGE_API_KEY = os.getenv("VOAGE_API_KEY")  # Open AI 서버 다운시 사용
+CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")  # Open AI 서버 다운시 사용
 
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY not found in .env file.")
@@ -113,55 +103,26 @@ embeddings = OpenAIEmbeddings(
     openai_api_key=OPENAI_API_KEY, model="text-embedding-ada-002"
 )
 
-# # claude 임베딩 모델
+# # claude 임베딩 모델(Open AI 서버 다운시 사용)
 # embeddings = VoyageAIEmbeddings(
 #     voyage_api_key=VOAGE_API_KEY, model="voyage-lite-02-instruct"
 # )
 
 
+# 재귀적 분할기로 chunking
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 
 # 벡터 스토어 초기화
 vectorstore = None
 
 
-# CSV 디렉토리와 Chroma DB 디렉토리를 초기화 및 생성
-# def initialize_directories():
-#     lock = InterProcessLock(LOCK_FILE)
-#     if lock.acquire(blocking=False):  # 잠금 획득 시만 초기화 수행
-#         try:
-#             if os.path.exists(CHROMA_DB_DIR):
-#                 shutil.rmtree(CHROMA_DB_DIR)
-#                 print(f"Cleared Chroma DB directory: {CHROMA_DB_DIR}")
-#             os.makedirs(CHROMA_DB_DIR, exist_ok=True)
-#             print(f"Created Chroma DB directory: {CHROMA_DB_DIR}")
-#         finally:
-#             lock.release()
-#     else:
-#         print("Another process is already initializing directories. Skipping...")
-
-
+# 코드 실행시 디렉토리 초기화
 def initialize_directories():
-    os.makedirs(os.path.dirname(LOCK_FILE), exist_ok=True)  # 잠금 파일의 디렉토리 생성
-    lock = InterProcessLock(LOCK_FILE)  # 잠금 파일을 통한 동시성 제어
-
-    try:
-        if lock.acquire(blocking=True, timeout=10):  # 잠금 획득 대기 (최대 10초)
-            try:
-                if os.path.exists(CHROMA_DB_DIR):
-                    print(f"Chroma DB directory already exists: {CHROMA_DB_DIR}")
-                else:
-                    os.makedirs(CHROMA_DB_DIR, exist_ok=True)
-                    print(f"Created Chroma DB directory: {CHROMA_DB_DIR}")
-            finally:
-                lock.release()
-        else:
-            print("Failed to acquire lock. Another process is initializing.")
-    except Exception as e:
-        print(f"Error during directory initialization: {e}")
+    os.makedirs(CHROMA_DB_DIR, exist_ok=True)
+    logging.info(f"Chroma DB directory initialized: {CHROMA_DB_DIR}")
 
 
-# SQLAlchemy 엔진 생성(mariadb )
+# SQLAlchemy 엔진 생성(mariadb)
 def connect_sqlalchemy():
     try:
         engine = create_engine(
@@ -186,15 +147,15 @@ def store_files_in_chroma():
             loader = PyPDFLoader(pdf_path)
             documents.extend(loader.load_and_split())
 
-    # 문서 분할 및 벡터화
+    # 문서 분할(chunking) 및 벡터화
     split_docs = text_splitter.split_documents(documents)
+
+    # 벡터 스토어에 chunked 문서 저장
     if split_docs:
         vectorstore = Chroma.from_documents(
-            documents=split_docs,
-            embedding=embeddings,
-            persist_directory=CHROMA_DB_DIR,
+            split_docs, embeddings, persist_directory=CHROMA_DB_DIR
         )
-        print("Data stored in Chroma DB.")
+        logging.info("Files successfully stored in Chroma DB.")
 
 
 # 24시간 간격으로 배치를 실행
@@ -204,8 +165,7 @@ async def run_batch():
         try:
             print(f"Batch started at {datetime.now()}")
             initialize_directories()  # 1. 디렉토리 초기화 및 생성
-            # export_tables_to_csv()  # 2. 모든 테이블 데이터를 CSV로 저장
-            store_files_in_chroma()  # 3. CSV, PDF 데이터를 벡터 DB에 저장
+            store_files_in_chroma()  # 2. CSV, PDF 데이터를 벡터 DB에 저장
             print(f"Batch completed at {datetime.now()}")
         except Exception as e:
             print(f"Error during batch execution: {e}")
@@ -265,21 +225,35 @@ def close_vectorstore():
         print("Vectorstore closed successfully.")
 
 
-# Lifespan 이벤트 핸들러
+# # Lifespan 이벤트 핸들러
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     """Lifespan 이벤트 핸들러"""
+#     try:
+#         # 애플리케이션 초기화 시 실행할 작업
+#         print("Application starting...")
+#         initialize_directories()  # 디렉토리 초기화
+#         # export_tables_to_csv()  # CSV 생성
+#         store_files_in_chroma()  # Vectorstore에 데이터 저장
+#         yield  # 애플리케이션 실행
+#     finally:
+#         # 애플리케이션 종료 시 실행할 작업
+#         print("Shutting down...")
+#         close_vectorstore()  # Vectorstore 종료
+
+
+# 애플리케이션 시작 및 종료 이벤트 핸들러
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan 이벤트 핸들러"""
     try:
-        # 애플리케이션 초기화 시 실행할 작업
-        print("Application starting...")
-        initialize_directories()  # 디렉토리 초기화
-        # export_tables_to_csv()  # CSV 생성
-        store_files_in_chroma()  # Vectorstore에 데이터 저장
+        logging.info("Application initializing...")
+        initialize_directories()
+        store_files_in_chroma()
+        asyncio.create_task(run_batch())
         yield  # 애플리케이션 실행
     finally:
-        # 애플리케이션 종료 시 실행할 작업
-        print("Shutting down...")
-        close_vectorstore()  # Vectorstore 종료
+        logging.info("Shutting down application...")
+        close_vectorstore()
 
 
 # FastAPI 인스턴스에 lifespan 설정
@@ -439,7 +413,7 @@ def create_chain_with_message_history():
         temperature=0.1,
     )
 
-    # LLM 설정
+    # LLM 설정(Open AI 서버 다운시 사용)
     # llm = ChatAnthropic(
     #     api_key=CLAUDE_API_KEY, model="claude-3-haiku-20240307", temperature=0.1
     # )
@@ -955,6 +929,12 @@ def generate_employee_summary_text(summary):
         result.append("\n근태 신청: 데이터가 없습니다.")
 
     return "\n".join(result)
+
+
+# 헬스 체크 API
+@app.get("/health")
+async def health_check():
+    return {"status": "Application is running successfully."}
 
 
 if __name__ == "__main__":

@@ -132,7 +132,7 @@
 
    
 ### 📌 프로젝트 주제
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;효과적인 인사관리 시스템   
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;효율적인 인사관리 시스템   
 
 
    
